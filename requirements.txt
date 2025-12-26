@@ -1,0 +1,25 @@
+# Core Dependencies
+pydantic>=2.0.0
+langgraph>=0.0.20
+langchain>=0.1.0
+
+# NLP and ML
+spacy>=3.7.0
+transformers>=4.35.0
+sentence-transformers>=2.2.0
+
+# Security and Crypto
+cryptography>=41.0.0
+python-jose>=3.3.0
+
+# Utilities
+python-dateutil>=2.8.0
+
+# Optional: Enhanced PHI Detection
+# scibert-scivocab-uncased  # For medical entity recognition
+
+# Development Dependencies (optional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+mypy>=1.7.0
