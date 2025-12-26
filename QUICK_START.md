@@ -15,7 +15,7 @@ Sentinel is a **Zero-Trust AI Security Control Plane** that sits between your us
 
 ## Installation
 
-```bash
+```bashove -v
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```

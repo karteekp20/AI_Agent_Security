@@ -614,6 +614,39 @@ class RiskScoringConfig(BaseModel):
     strict_mode_multiplier: float = 1.2  # Increase risk scores in strict mode
 
 
+class ShadowAgentEscalationConfig(BaseModel):
+    """Configuration for shadow agent escalation (Phase 2)"""
+    enabled: bool = False  # Disabled by default
+
+    # Escalation thresholds
+    low_risk_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    medium_risk_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    high_risk_threshold: float = Field(default=0.95, ge=0.0, le=1.0)
+
+    # Which agents to enable
+    enable_input_agent: bool = True
+    enable_state_agent: bool = True
+    enable_output_agent: bool = True
+
+    # LLM Configuration
+    llm_provider: str = "anthropic"  # "anthropic", "openai", "local"
+    llm_model: str = "claude-3-5-haiku-20241022"  # Fast, cost-effective
+    temperature: float = Field(default=0.1, ge=0.0, le=1.0)
+    max_tokens: int = 1024
+    timeout_ms: int = 5000
+
+    # Fallback and reliability
+    fallback_to_rules: bool = True
+    enable_caching: bool = True
+    cache_ttl_seconds: int = 3600
+
+    # Circuit breaker
+    circuit_breaker_enabled: bool = True
+    failure_threshold: int = 5
+    success_threshold: int = 3
+    timeout_duration_seconds: int = 60
+
+
 class SentinelConfig(BaseModel):
     """Complete Sentinel framework configuration"""
     pii_detection: PIIDetectionConfig = Field(default_factory=PIIDetectionConfig)
@@ -622,6 +655,7 @@ class SentinelConfig(BaseModel):
     red_team: RedTeamConfig = Field(default_factory=RedTeamConfig)
     compliance: ComplianceConfig = Field(default_factory=ComplianceConfig)
     risk_scoring: RiskScoringConfig = Field(default_factory=RiskScoringConfig)  # Phase 1 addition
+    shadow_agents: ShadowAgentEscalationConfig = Field(default_factory=ShadowAgentEscalationConfig)  # Phase 2 addition
 
     # Global settings
     enable_input_guard: bool = True
