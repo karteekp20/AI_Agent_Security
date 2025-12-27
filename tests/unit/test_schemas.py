@@ -31,10 +31,11 @@ class TestRedactedEntity:
             entity_type=EntityType.EMAIL,
             original_value="john@example.com",
             redacted_value="[REDACTED_EMAIL_001]",
-            start_pos=10,
-            end_pos=27,
+            start_position=10,
+            end_position=27,
             confidence=0.95,
-            redaction_strategy=RedactionStrategy.TOKEN
+            redaction_strategy=RedactionStrategy.TOKEN,
+            detection_method="regex"
         )
 
         assert entity.entity_type == EntityType.EMAIL
@@ -47,9 +48,11 @@ class TestRedactedEntity:
                 entity_type=EntityType.EMAIL,
                 original_value="test",
                 redacted_value="[REDACTED]",
-                start_pos=0,
-                end_pos=4,
-                confidence=1.5  # Invalid
+                start_position=0,
+                end_position=4,
+                confidence=1.5,  # Invalid
+                redaction_strategy=RedactionStrategy.MASK,
+                detection_method="regex"
             )
 
 
@@ -162,15 +165,17 @@ class TestInjectionDetection:
     def test_injection_detected(self):
         """Test injection detection model"""
         detection = InjectionDetection(
-            injection_detected=True,
-            injection_types=[InjectionType.DIRECT, InjectionType.JAILBREAK],
+            detected=True,
+            injection_type=InjectionType.DIRECT,
             confidence=0.92,
-            matched_patterns=["ignore previous", "bypass"],
-            risk_score=0.95
+            patterns_matched=["ignore previous", "bypass"],
+            risk_score=0.95,
+            explanation="Detected injection patterns",
+            should_block=True
         )
 
-        assert detection.injection_detected
-        assert len(detection.injection_types) == 2
+        assert detection.detected
+        assert detection.injection_type == InjectionType.DIRECT
         assert detection.risk_score == 0.95
 
 
@@ -184,8 +189,9 @@ class TestLoopDetection:
             loop_type=LoopType.EXACT,
             confidence=0.98,
             repetition_count=10,
-            repeated_sequence=["search", "search"],
-            explanation="Exact tool call repeated 10 times"
+            tool_call_pattern=["search", "search"],
+            progress_made=False,
+            suggested_action="block"
         )
 
         assert detection.loop_detected
@@ -232,8 +238,7 @@ class TestCreateInitialState:
 
         assert state["user_input"] == "test input"
         assert state["redacted_input"] == "test input"  # Not yet redacted
-        assert state["blocked"] == False
-        assert state["should_block"] == False
+        assert state["should_block"] is False
         assert isinstance(state["session_id"], str)
         assert len(state["risk_scores"]) == 0
 

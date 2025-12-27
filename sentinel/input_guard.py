@@ -371,7 +371,9 @@ class PIIDetector:
 # ============================================================================
 
 class InjectionPatterns:
-    """Known prompt injection patterns"""
+    """Known injection attack patterns (Prompt, SQL, Command, XSS, etc.)"""
+
+    # === PROMPT INJECTION PATTERNS ===
 
     # Direct instruction overrides
     DIRECT_PATTERNS = [
@@ -401,12 +403,102 @@ class InjectionPatterns:
         r"<\|endoftext\|>",
     ]
 
-    # Data exfiltration
+    # Data exfiltration and social engineering
     EXFILTRATION_PATTERNS = [
+        # System prompt exfiltration
         r"print\s+(?:your|the)\s+(?:system|instructions?|prompt)",
         r"show\s+(?:me\s+)?(?:your|the)\s+(?:system|instructions?|prompt)",
         r"what\s+(?:are|is)\s+your\s+(?:system|instructions?|rules)",
         r"repeat\s+(?:your|the)\s+(?:instructions?|prompt|rules)",
+
+        # Credential and secret exfiltration
+        r"(?:share|give|tell|show|provide|send|list)\s+(?:me\s+)?(?:the|your|my|our|all)?\s*(?:password|passwd|pwd)",
+        r"(?:share|give|tell|show|provide|send|list)\s+(?:me\s+)?(?:the|your|my|our|all)?\s*(?:api[_\s]?key|token|secret|credential)",
+        r"(?:what|whats|what's)\s+(?:is\s+)?(?:the|your|my|our)\s+(?:password|api[_\s]?key|token|secret)",
+        r"(?:database|db|sql|mysql|postgres)\s+(?:password|credentials?|login)",
+        r"(?:admin|root|administrator)\s+(?:password|credentials?|login)",
+        r"(?:access|private|secret)\s+(?:key|token|code|password)",
+        r"(?:reveal|expose|leak|disclose)\s+(?:password|key|token|secret|credential)",
+
+        # Customer/client data exfiltration
+        r"(?:share|give|tell|show|provide|send|list|export)\s+(?:me\s+)?(?:the|your|all|our)?\s*(?:client|customer|user)(?:'s|s)?\s+(?:detail|information|data|record|profile|list)",
+        r"(?:share|give|tell|show|provide|send|list|export)\s+(?:me\s+)?(?:all|the)?\s*(?:email|contact|phone|address)(?:es)?(?:\s+(?:of|from|for|list))?",
+        r"(?:export|download|send|list)\s+(?:all|the)?\s*(?:user|customer|client)?\s*(?:data|information|list|database|email|contact)s?",
+        r"(?:what|who)\s+(?:are|is)\s+(?:your|the|our)\s+(?:client|customer|user)s?",
+        r"(?:list|show)\s+(?:all|the)?\s*(?:client|customer|user|member)s?",
+        r"(?:share|give|tell|show)\s+(?:me\s+)?(?:their|his|her)\s+(?:detail|information|contact|email|phone|address)",
+
+        # Confidential information requests
+        r"(?:share|give|tell|show|provide|export)\s+(?:me\s+)?(?:confidential|private|internal|sensitive)?\s*(?:customer|client|user)?\s+(?:information|data|detail|document)",
+        r"(?:access|view|see)\s+(?:confidential|private|internal|restricted)\s+(?:file|data|information|record)",
+    ]
+
+    # === SQL INJECTION PATTERNS ===
+
+    SQL_INJECTION_PATTERNS = [
+        r"(?:';|\")\s*(?:DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|EXEC|EXECUTE)\s+(?:TABLE|DATABASE|USER)",
+        r"(?:UNION\s+(?:ALL\s+)?SELECT|SELECT\s+.*\s+FROM)",
+        r"(?:OR|AND)\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?",  # OR 1=1
+        r"(?:--|\#|\/\*|\*\/)",  # SQL comment markers
+        r";\s*(?:DROP|DELETE|UPDATE|INSERT|EXEC)",
+        r"(?:SLEEP|BENCHMARK|WAITFOR\s+DELAY)",  # Time-based blind SQLi
+        r"(?:CAST|CONVERT|CONCAT)\s*\(",  # SQL functions often used in attacks
+        r"(?:xp_cmdshell|sp_executesql)",  # MSSQL command execution
+        r"(?:information_schema|sysobjects|syscolumns)",  # Database enumeration
+    ]
+
+    # === COMMAND INJECTION PATTERNS ===
+
+    COMMAND_INJECTION_PATTERNS = [
+        r"(?:;|\||&|&&|\|\|)\s*(?:ls|cat|wget|curl|nc|bash|sh|cmd|powershell|rm|mv|cp)",
+        r"`.*`",  # Backticks for command substitution
+        r"\$\(.*\)",  # Command substitution
+        r"(?:>|>>|<)\s*\/(?:etc|dev|proc)",  # File redirection to sensitive paths
+        r"(?:&&|\|\|)\s*(?:echo|printf|cat)\s+",  # Command chaining
+        r"(?:\\x[0-9a-fA-F]{2})+",  # Hex encoding (potential obfuscation)
+    ]
+
+    # === XSS (Cross-Site Scripting) PATTERNS ===
+
+    XSS_PATTERNS = [
+        r"<script[^>]*>.*?</script>",
+        r"javascript:",
+        r"on(?:load|error|click|mouse\w+)\s*=",  # Event handlers
+        r"<iframe[^>]*>",
+        r"<img[^>]*\s+on\w+\s*=",
+        r"<svg[^>]*\s+on\w+\s*=",
+        r"eval\s*\(",
+        r"(?:alert|confirm|prompt)\s*\(",
+    ]
+
+    # === PATH TRAVERSAL PATTERNS ===
+
+    PATH_TRAVERSAL_PATTERNS = [
+        r"\.\.\/",  # Directory traversal
+        r"\.\.\%2[fF]",  # URL encoded traversal
+        r"\/etc\/passwd",
+        r"\/etc\/shadow",
+        r"C:\\Windows\\",
+        r"%00",  # Null byte injection
+    ]
+
+    # === LDAP INJECTION PATTERNS ===
+
+    LDAP_INJECTION_PATTERNS = [
+        r"\*\)",  # LDAP wildcard closing
+        r"\(\|",  # LDAP OR operator
+        r"admin\)\(\|",  # admin)( followed by pipe
+        r"\)\(uid=\*",  # uid wildcard
+        r"\)\(cn=\*",  # cn wildcard
+    ]
+
+    # === XML INJECTION PATTERNS ===
+
+    XML_INJECTION_PATTERNS = [
+        r"<\?xml",
+        r"<!DOCTYPE",
+        r"<!ENTITY",
+        r"SYSTEM\s+['\"]",
     ]
 
 
@@ -418,12 +510,21 @@ class InjectionDetector:
         self.patterns = self._compile_patterns()
 
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
-        """Compile injection detection patterns"""
+        """Compile injection detection patterns for all attack types"""
         return {
+            # Prompt injection patterns
             "direct": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.DIRECT_PATTERNS],
             "roleplay": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.ROLEPLAY_PATTERNS],
             "delimiter": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.DELIMITER_PATTERNS],
             "exfiltration": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.EXFILTRATION_PATTERNS],
+
+            # Code injection patterns (OWASP Top 10)
+            "sql_injection": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.SQL_INJECTION_PATTERNS],
+            "command_injection": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.COMMAND_INJECTION_PATTERNS],
+            "xss": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.XSS_PATTERNS],
+            "path_traversal": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.PATH_TRAVERSAL_PATTERNS],
+            "ldap_injection": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.LDAP_INJECTION_PATTERNS],
+            "xml_injection": [re.compile(p, re.IGNORECASE) for p in InjectionPatterns.XML_INJECTION_PATTERNS],
         }
 
     def detect_injection(self, text: str) -> InjectionDetection:
@@ -555,12 +656,26 @@ class InjectionDetector:
 class InputGuardAgent:
     """
     Input Guard Agent: First layer of defense
-    Validates, detects PII, and checks for injection
+    Validates, detects PII, checks for injection, and moderates content
     """
 
-    def __init__(self, pii_config: PIIDetectionConfig, injection_config: InjectionDetectionConfig):
+    def __init__(
+        self,
+        pii_config: PIIDetectionConfig,
+        injection_config: InjectionDetectionConfig,
+        content_moderation_config=None,
+    ):
         self.pii_detector = PIIDetector(pii_config)
         self.injection_detector = InjectionDetector(injection_config)
+
+        # Content moderation (optional)
+        self.toxicity_detector = None
+        if content_moderation_config:
+            try:
+                from .content_moderation import ToxicityDetector
+                self.toxicity_detector = ToxicityDetector(content_moderation_config)
+            except ImportError:
+                pass
 
     def calculate_risk_score(
         self,
@@ -655,12 +770,25 @@ class InputGuardAgent:
         # 3. Check for prompt injection
         injection_result = self.injection_detector.detect_injection(redacted_input)
 
+        # 3.5. Check for toxic content (content moderation)
+        toxicity_result = None
+        if self.toxicity_detector:
+            toxicity_result = self.toxicity_detector.detect_toxicity(user_input)
+
         # 4. Update state
         state["redacted_input"] = redacted_input
         state["original_entities"] = [e.dict() for e in entities]
 
         state["injection_detected"] = injection_result.detected
         state["injection_details"] = injection_result.dict()
+
+        # Store toxicity detection results
+        if toxicity_result:
+            state["toxicity_detected"] = toxicity_result.detected
+            state["toxicity_details"] = toxicity_result.dict()
+        else:
+            state["toxicity_detected"] = False
+            state["toxicity_details"] = None
 
         # 5. Set control flags
         if injection_result.should_block:
@@ -685,6 +813,35 @@ class InputGuardAgent:
         elif injection_result.detected:
             state["should_warn"] = True
             state["warning_message"] = f"Suspicious input detected: {injection_result.explanation}"
+
+        # 5.5. Handle toxic content
+        if toxicity_result and toxicity_result.should_block:
+            state["should_block"] = True
+            state["block_reason"] = f"Toxic content detected: {toxicity_result.explanation}"
+
+            # Add security threat
+            threat = SecurityThreat(
+                threat_type="toxic_content",
+                severity=ThreatLevel.HIGH if toxicity_result.severity == "high" else ThreatLevel.MEDIUM,
+                description=toxicity_result.explanation,
+                detection_method="content_moderation",
+                confidence=toxicity_result.toxicity_score,
+                evidence={
+                    "categories": [c.value for c in toxicity_result.categories],
+                    "patterns_matched": toxicity_result.patterns_matched,
+                    "toxicity_score": toxicity_result.toxicity_score,
+                    "severity": toxicity_result.severity,
+                },
+                blocked=True,
+            )
+            state["security_threats"].append(threat.dict())
+
+        elif toxicity_result and toxicity_result.should_warn:
+            state["should_warn"] = True
+            if state.get("warning_message"):
+                state["warning_message"] += f"; {toxicity_result.explanation}"
+            else:
+                state["warning_message"] = toxicity_result.explanation
 
         # 6. Calculate risk score (Phase 1 enhancement)
         risk_score = self.calculate_risk_score(entities, injection_result)

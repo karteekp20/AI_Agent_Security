@@ -1,0 +1,112 @@
+================================================================================
+HOW TO VALIDATE PHASE 1 & PHASE 2 - EXACT COMMANDS
+================================================================================
+
+Run these commands in your terminal:
+
+# Step 1: Go to project directory
+cd /home/karteek/Documents/Cloud_Workspace/ai_agent_security
+
+# Step 2: Activate existing virtual environment
+source venv/bin/activate
+
+# Step 3: Install dependencies
+pip install pydantic anthropic openai
+
+# Step 4: Run quick validation
+python quick_test.py
+
+# Expected output: All 5 tests pass ✓
+
+================================================================================
+ALTERNATIVE: If venv activation fails
+================================================================================
+
+# Option A: Use existing myvenv instead
+source myvenv/bin/activate
+pip install pydantic anthropic openai
+python quick_test.py
+
+# Option B: Create new venv
+python3 -m venv myenv
+source myenv/bin/activate
+pip install pydantic anthropic openai
+python quick_test.py
+
+================================================================================
+WHAT YOU'LL SEE (Expected Output)
+================================================================================
+
+======================================================================
+QUICK VALIDATION - PHASE 1 & PHASE 2
+======================================================================
+
+[1/5] Testing imports...
+✓ All imports successful
+
+[2/5] Testing Phase 1 - Clean Input...
+✓ Risk Score: 0.05
+✓ Blocked: False
+✓ Phase 1 working!
+
+[3/5] Testing Phase 1 - PII Detection...
+✓ PII Detected: 1 entities
+✓ Risk Score: 0.65
+✓ PII detection working!
+
+[4/5] Testing Phase 1 - Prompt Injection Detection...
+✓ Injection Detected: True
+✓ Risk Score: 0.85
+✓ Injection detection working!
+
+[5/5] Testing Phase 2 - Shadow Agents...
+✓ Shadow Agents Enabled (default): False
+✓ Shadow Agents Enabled: True
+✓ Shadow Escalated: True
+✓ Phase 2 working! (using fallback without API key)
+
+======================================================================
+VALIDATION COMPLETE
+======================================================================
+
+✅ Phase 1: Risk Scoring - WORKING
+✅ Phase 2: Shadow Agents - WORKING
+
+================================================================================
+AFTER VALIDATION PASSES - Run Full Demos
+================================================================================
+
+# Phase 1 detailed demo (7 examples)
+python examples/demo_phase1.py
+
+# Phase 2 detailed demo (8 examples)
+python examples/demo_phase2.py
+
+================================================================================
+HOW TO USE IN YOUR CODE
+================================================================================
+
+# In any Python file:
+from sentinel import SentinelConfig, SentinelGateway
+
+config = SentinelConfig()
+gateway = SentinelGateway(config)
+
+result = gateway.invoke(
+    "User input here",
+    agent_executor=lambda x: "Agent response"
+)
+
+print(f"Risk: {result['aggregated_risk']['overall_risk_score']:.2f}")
+print(f"Blocked: {result['blocked']}")
+print(f"Response: {result['response']}")
+
+================================================================================
+NEED HELP?
+================================================================================
+
+1. Check SETUP_AND_RUN.md for detailed instructions
+2. Check examples/ directory for more examples
+3. Check docs/ for Phase 1 & Phase 2 guides
+
+================================================================================

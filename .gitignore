@@ -1,5 +1,5 @@
 env
 .env
-venv
+venv/
 .claude
-
+myvenv/

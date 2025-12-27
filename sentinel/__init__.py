@@ -42,6 +42,7 @@ from .schemas import (
     LoopDetectionConfig,
     RedTeamConfig,
     ComplianceConfig,
+    create_initial_state,
     # Enums
     EntityType,
     RedactionStrategy,
@@ -86,6 +87,7 @@ __all__ = [
 
     # State
     "SentinelState",
+    "create_initial_state",
 
     # Enums
     "EntityType",

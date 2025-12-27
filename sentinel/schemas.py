@@ -657,17 +657,32 @@ class SentinelConfig(BaseModel):
     risk_scoring: RiskScoringConfig = Field(default_factory=RiskScoringConfig)  # Phase 1 addition
     shadow_agents: ShadowAgentEscalationConfig = Field(default_factory=ShadowAgentEscalationConfig)  # Phase 2 addition
 
+    # Content moderation (import happens in the config initialization)
+    content_moderation: Optional[Any] = None  # Will be ContentModerationConfig if available
+
     # Global settings
     enable_input_guard: bool = True
     enable_output_guard: bool = True
     enable_state_monitor: bool = True
+    enable_content_moderation: bool = True  # New: Content moderation
 
     # Performance
     max_execution_time_ms: int = 30000
     max_tokens_per_request: int = 100000
 
+    def __init__(self, **data):
+        # Import ContentModerationConfig here to avoid circular imports
+        try:
+            from .content_moderation import ContentModerationConfig
+            if 'content_moderation' not in data:
+                data['content_moderation'] = ContentModerationConfig()
+        except ImportError:
+            data['content_moderation'] = None
+        super().__init__(**data)
+
     class Config:
         use_enum_values = True
+        arbitrary_types_allowed = True
 
 
 # ============================================================================
@@ -680,7 +695,8 @@ def create_initial_state(
     user_id: Optional[str] = None,
     user_role: Optional[str] = None,
     ip_address: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
+    session_id: Optional[str] = None
 ) -> SentinelState:
     """
     Create initial state for LangGraph workflow
@@ -692,8 +708,11 @@ def create_initial_state(
         user_role: Optional user role (admin, user, guest)
         ip_address: Optional IP address
         metadata: Optional custom metadata
+        session_id: Optional session identifier (auto-generated if not provided)
     """
-    session_id = f"session_{uuid.uuid4().hex}"
+    # Use provided session_id or generate new one
+    if session_id is None:
+        session_id = f"session_{uuid.uuid4().hex}"
 
     # Create request context
     request_context = RequestContext(

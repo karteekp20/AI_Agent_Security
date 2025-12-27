@@ -83,8 +83,12 @@ class TestOutputGuard:
         state["original_entities"] = [{
             "entity_type": EntityType.EMAIL,
             "original_value": "john@example.com",
-            "start_pos": 0,
-            "end_pos": 18,
+            "start_position": 0,
+            "end_position": 18,
+            "redacted_value": "[REDACTED_EMAIL]",
+            "redaction_strategy": "token",
+            "confidence": 0.95,
+            "detection_method": "regex"
         }]
 
         result = guard.process(state)

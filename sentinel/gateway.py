@@ -67,6 +67,7 @@ class SentinelGateway:
         self.input_guard = InputGuardAgent(
             config.pii_detection,
             config.injection_detection,
+            config.content_moderation if config.enable_content_moderation else None,
         )
 
         self.output_guard = OutputGuardAgent(config.pii_detection)

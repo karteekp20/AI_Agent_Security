@@ -20,10 +20,10 @@ class TestLoopDetection:
 
         # Simulate exact repeated tool calls
         state["tool_calls"] = [
-            {"tool": "search", "args": {"query": "cats"}},
-            {"tool": "search", "args": {"query": "cats"}},
-            {"tool": "search", "args": {"query": "cats"}},
-            {"tool": "search", "args": {"query": "cats"}},
+            {"tool_name": "search", "arguments": {"query": "cats"}},
+            {"tool_name": "search", "arguments": {"query": "cats"}},
+            {"tool_name": "search", "arguments": {"query": "cats"}},
+            {"tool_name": "search", "arguments": {"query": "cats"}},
         ]
 
         result = monitor.process(state)
@@ -39,10 +39,10 @@ class TestLoopDetection:
         state = create_initial_state("test", SentinelConfig())
 
         state["tool_calls"] = [
-            {"tool": "search", "args": {"query": "cats"}},
-            {"tool": "search", "args": {"query": "dogs"}},
-            {"tool": "calculate", "args": {"expr": "2+2"}},
-            {"tool": "write", "args": {"content": "hello"}},
+            {"tool_name": "search", "arguments": {"query": "cats"}},
+            {"tool_name": "search", "arguments": {"query": "dogs"}},
+            {"tool_name": "calculate", "arguments": {"expr": "2+2"}},
+            {"tool_name": "write", "arguments": {"content": "hello"}},
         ]
 
         result = monitor.process(state)
@@ -58,10 +58,10 @@ class TestLoopDetection:
 
         # Similar but not identical
         state["tool_calls"] = [
-            {"tool": "search", "args": {"query": "how to cook pasta"}},
-            {"tool": "search", "args": {"query": "pasta cooking instructions"}},
-            {"tool": "search", "args": {"query": "how do I cook pasta"}},
-            {"tool": "search", "args": {"query": "pasta preparation guide"}},
+            {"tool_name": "search", "arguments": {"query": "how to cook pasta"}},
+            {"tool_name": "search", "arguments": {"query": "pasta cooking instructions"}},
+            {"tool_name": "search", "arguments": {"query": "how do I cook pasta"}},
+            {"tool_name": "search", "arguments": {"query": "pasta preparation guide"}},
         ]
 
         result = monitor.process(state)
@@ -80,11 +80,11 @@ class TestLoopDetection:
 
         # Cyclic pattern
         state["tool_calls"] = [
-            {"tool": "search", "args": {"query": "A"}},
-            {"tool": "calculate", "args": {"expr": "B"}},
-            {"tool": "search", "args": {"query": "A"}},
-            {"tool": "calculate", "args": {"expr": "B"}},
-            {"tool": "search", "args": {"query": "A"}},
+            {"tool_name": "search", "arguments": {"query": "A"}},
+            {"tool_name": "calculate", "arguments": {"expr": "B"}},
+            {"tool_name": "search", "arguments": {"query": "A"}},
+            {"tool_name": "calculate", "arguments": {"expr": "B"}},
+            {"tool_name": "search", "arguments": {"query": "A"}},
         ]
 
         result = monitor.process(state)
@@ -101,11 +101,11 @@ class TestLoopDetection:
         state = create_initial_state("test", SentinelConfig())
 
         # Just below threshold
-        state["tool_calls"] = [{"tool": "search", "args": {}} for _ in range(4)]
+        state["tool_calls"] = [{"tool_name": "search", "arguments": {}} for _ in range(4)]
         result_below = monitor.process(state)
 
         # At/above threshold
-        state["tool_calls"] = [{"tool": "search", "args": {}} for _ in range(6)]
+        state["tool_calls"] = [{"tool_name": "search", "arguments": {}} for _ in range(6)]
         result_above = monitor.process(state)
 
         # Below threshold should not detect
@@ -123,8 +123,8 @@ class TestCostMonitoring:
 
         state = create_initial_state("test", SentinelConfig())
         state["tool_calls"] = [
-            {"tool": "search", "args": {}},
-            {"tool": "calculate", "args": {}},
+            {"tool_name": "search", "arguments": {}},
+            {"tool_name": "calculate", "arguments": {}},
         ]
 
         result = monitor.process(state)
@@ -158,7 +158,7 @@ class TestCostMonitoring:
         monitor = StateMonitorAgent(config)
 
         state = create_initial_state("test", SentinelConfig())
-        state["tool_calls"] = [{"tool": f"call_{i}", "args": {}} for i in range(100)]
+        state["tool_calls"] = [{"tool_name": f"call_{i}", "arguments": {}} for i in range(100)]
 
         result = monitor.process(state)
 
@@ -175,7 +175,7 @@ class TestRiskScoring:
         monitor = StateMonitorAgent(config)
 
         state = create_initial_state("test", SentinelConfig())
-        state["tool_calls"] = [{"tool": "same", "args": {}} for _ in range(10)]
+        state["tool_calls"] = [{"tool_name": "same", "arguments": {}} for _ in range(10)]
 
         result = monitor.process(state)
 
@@ -191,8 +191,8 @@ class TestRiskScoring:
 
         state = create_initial_state("test", SentinelConfig())
         state["tool_calls"] = [
-            {"tool": "search", "args": {}},
-            {"tool": "calculate", "args": {}},
+            {"tool_name": "search", "arguments": {}},
+            {"tool_name": "calculate", "arguments": {}},
         ]
         state["cost_metrics"] = {
             "total_tokens": 100,
@@ -213,7 +213,7 @@ class TestRiskScoring:
         monitor = StateMonitorAgent(config)
 
         state = create_initial_state("test", SentinelConfig())
-        state["tool_calls"] = [{"tool": "same", "args": {}} for _ in range(10)]
+        state["tool_calls"] = [{"tool_name": "same", "arguments": {}} for _ in range(10)]
 
         result = monitor.process(state)
 
