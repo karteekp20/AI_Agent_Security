@@ -29,6 +29,19 @@ from .state_monitor import StateMonitorAgent
 from .red_team import RedTeamAgent
 from .audit import AuditManager
 
+# Phase 2: Shadow Agent Integration
+try:
+    from .shadow_agents import (
+        ShadowInputAgent,
+        ShadowStateAgent,
+        ShadowOutputAgent,
+        ShadowAgentConfig,
+    )
+    SHADOW_AGENTS_AVAILABLE = True
+except ImportError:
+    SHADOW_AGENTS_AVAILABLE = False
+    print("Warning: Shadow agents not available. Run with Phase 1 rule-based security only.")
+
 
 # ============================================================================
 # SENTINEL GATEWAY
@@ -54,6 +67,7 @@ class SentinelGateway:
         self.input_guard = InputGuardAgent(
             config.pii_detection,
             config.injection_detection,
+            config.content_moderation if config.enable_content_moderation else None,
         )
 
         self.output_guard = OutputGuardAgent(config.pii_detection)
@@ -70,13 +84,44 @@ class SentinelGateway:
             secret_key=secret_key,
         )
 
+        # Phase 2: Initialize shadow agents
+        self.shadow_agents_enabled = (
+            SHADOW_AGENTS_AVAILABLE and
+            config.shadow_agents.enabled
+        )
+
+        if self.shadow_agents_enabled:
+            shadow_config = ShadowAgentConfig(
+                enabled=True,
+                llm_provider=config.shadow_agents.llm_provider,
+                llm_model=config.shadow_agents.llm_model,
+                temperature=config.shadow_agents.temperature,
+                max_tokens=config.shadow_agents.max_tokens,
+                timeout_ms=config.shadow_agents.timeout_ms,
+                fallback_to_rules=config.shadow_agents.fallback_to_rules,
+                enable_caching=config.shadow_agents.enable_caching,
+                cache_ttl_seconds=config.shadow_agents.cache_ttl_seconds,
+                circuit_breaker_enabled=config.shadow_agents.circuit_breaker_enabled,
+                failure_threshold=config.shadow_agents.failure_threshold,
+                success_threshold=config.shadow_agents.success_threshold,
+                timeout_duration_seconds=config.shadow_agents.timeout_duration_seconds,
+            )
+
+            self.shadow_input = ShadowInputAgent(shadow_config) if config.shadow_agents.enable_input_agent else None
+            self.shadow_state = ShadowStateAgent(shadow_config) if config.shadow_agents.enable_state_agent else None
+            self.shadow_output = ShadowOutputAgent(shadow_config) if config.shadow_agents.enable_output_agent else None
+        else:
+            self.shadow_input = None
+            self.shadow_state = None
+            self.shadow_output = None
+
         # Build LangGraph workflow
         if LANGGRAPH_AVAILABLE:
             self.graph = self._build_graph()
         else:
             self.graph = None
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> "StateGraph":
         """Build LangGraph state machine"""
         if not LANGGRAPH_AVAILABLE:
             raise ImportError("LangGraph not installed")
@@ -207,6 +252,173 @@ class SentinelGateway:
         if state["should_block"]:
             return "block"
         return "continue"
+
+    # ========================================================================
+    # SHADOW AGENT NODES (Phase 2)
+    # ========================================================================
+
+    def _should_escalate_to_shadow_agents(self, state: SentinelState) -> bool:
+        """
+        Determine if request should be escalated to shadow agents
+
+        Escalation criteria:
+        - Shadow agents are enabled
+        - Risk score exceeds configured threshold
+        - Not already escalated (avoid double escalation)
+        """
+        if not self.shadow_agents_enabled:
+            return False
+
+        if state.get("shadow_agent_escalated", False):
+            return False  # Already escalated
+
+        aggregated_risk = state.get("aggregated_risk")
+        if not aggregated_risk:
+            return False
+
+        overall_risk = aggregated_risk.get("overall_risk_score", 0.0)
+        threshold = self.config.shadow_agents.medium_risk_threshold
+
+        return overall_risk >= threshold
+
+    def _shadow_input_analysis_node(self, state: SentinelState) -> SentinelState:
+        """Shadow Input Agent: Deep intent analysis"""
+        if not self.shadow_input or not self._should_escalate_to_shadow_agents(state):
+            return state
+
+        try:
+            # Prepare context for shadow agent
+            context = {
+                "user_input": state["user_input"],
+                "conversation_history": [],  # TODO: Add conversation tracking
+                "existing_threats": state["security_threats"],
+                "request_context": state["request_context"],
+            }
+
+            # Run shadow agent analysis
+            response = self.shadow_input.analyze(context)
+
+            # Add to shadow agent analyses
+            state["shadow_agent_analyses"].append(response.dict())
+
+            # Update risk if shadow agent found higher risk
+            if response.risk_score > state.get("aggregated_risk", {}).get("overall_risk_score", 0.0):
+                # Shadow agent detected higher risk
+                state["should_warn"] = True
+                state["warning_message"] = f"Shadow agent detected: {', '.join(response.threats_detected)}"
+
+                # If critical risk, block
+                if response.risk_level == "critical":
+                    state["should_block"] = True
+                    state["block_reason"] = f"Critical security threat detected by shadow input agent: {response.reasoning}"
+
+            # Mark as escalated
+            state["shadow_agent_escalated"] = True
+            state["escalation_reason"] = "High risk input detected"
+
+            # Add audit event
+            audit_event = AuditEvent(
+                event_type=EventType.RISK_ASSESSMENT,
+                data=response.to_audit_event(),
+            )
+            state["audit_log"]["events"].append(audit_event.dict())
+
+        except Exception as e:
+            # Shadow agent failed, log but continue with rule-based results
+            state["warning_message"] = f"Shadow input agent failed: {str(e)}"
+            state["should_warn"] = True
+
+        return state
+
+    def _shadow_state_analysis_node(self, state: SentinelState) -> SentinelState:
+        """Shadow State Agent: Behavioral analysis"""
+        if not self.shadow_state or not self._should_escalate_to_shadow_agents(state):
+            return state
+
+        try:
+            # Prepare context for shadow agent
+            context = {
+                "execution_trace": [],  # TODO: Track execution trace
+                "tool_calls": state["tool_calls"],
+                "loop_detection": state.get("loop_details", {}),
+                "cost_metrics": state["cost_metrics"],
+                "user_intent": state["user_input"],
+                "expected_behavior": "Normal agent execution",
+            }
+
+            # Run shadow agent analysis
+            response = self.shadow_state.analyze(context)
+
+            # Add to shadow agent analyses
+            state["shadow_agent_analyses"].append(response.dict())
+
+            # Update state based on analysis
+            if response.risk_score > 0.8:
+                state["should_warn"] = True
+                state["warning_message"] = f"Behavioral anomaly: {response.reasoning}"
+
+                if response.risk_level == "critical":
+                    state["should_block"] = True
+                    state["block_reason"] = f"Critical behavioral anomaly: {response.reasoning}"
+
+            # Add audit event
+            audit_event = AuditEvent(
+                event_type=EventType.RISK_ASSESSMENT,
+                data=response.to_audit_event(),
+            )
+            state["audit_log"]["events"].append(audit_event.dict())
+
+        except Exception as e:
+            state["warning_message"] = f"Shadow state agent failed: {str(e)}"
+            state["should_warn"] = True
+
+        return state
+
+    def _shadow_output_analysis_node(self, state: SentinelState) -> SentinelState:
+        """Shadow Output Agent: Semantic leak detection"""
+        if not self.shadow_output or not self._should_escalate_to_shadow_agents(state):
+            return state
+
+        try:
+            # Prepare context for shadow agent
+            context = {
+                "agent_response": state["agent_response"],
+                "user_input": state["user_input"],
+                "context_info": state["request_context"],
+                "existing_threats": [
+                    t for t in state["security_threats"]
+                    if t.get("layer") == "output_guard"
+                ],
+            }
+
+            # Run shadow agent analysis
+            response = self.shadow_output.analyze(context)
+
+            # Add to shadow agent analyses
+            state["shadow_agent_analyses"].append(response.dict())
+
+            # Update state based on analysis
+            if response.risk_score > 0.8:
+                state["should_warn"] = True
+                state["warning_message"] = f"Output security risk: {response.reasoning}"
+
+                # Apply additional sanitization if needed
+                if response.risk_level in ["high", "critical"]:
+                    # Block output
+                    state["sanitized_response"] = "[BLOCKED: Response contains potential security violations]"
+
+            # Add audit event
+            audit_event = AuditEvent(
+                event_type=EventType.RISK_ASSESSMENT,
+                data=response.to_audit_event(),
+            )
+            state["audit_log"]["events"].append(audit_event.dict())
+
+        except Exception as e:
+            state["warning_message"] = f"Shadow output agent failed: {str(e)}"
+            state["should_warn"] = True
+
+        return state
 
     # ========================================================================
     # RISK AGGREGATION (Phase 1)
@@ -473,7 +685,29 @@ class SentinelGateway:
         if self.config.risk_scoring.enabled:
             state = self._aggregate_risk_scores(state)
 
-        # 7. Audit Finalize
+        # 7. Shadow Agent Escalation (Phase 2)
+        if self.shadow_agents_enabled and self._should_escalate_to_shadow_agents(state):
+            # Run shadow input analysis
+            if self.shadow_input:
+                state = self._shadow_input_analysis_node(state)
+
+            # Check if blocked after shadow input analysis
+            if state["should_block"]:
+                return self.audit_manager.finalize_audit_log(state)
+
+            # Run shadow state analysis
+            if self.shadow_state:
+                state = self._shadow_state_analysis_node(state)
+
+            # Check if blocked after shadow state analysis
+            if state["should_block"]:
+                return self.audit_manager.finalize_audit_log(state)
+
+            # Run shadow output analysis
+            if self.shadow_output:
+                state = self._shadow_output_analysis_node(state)
+
+        # 8. Audit Finalize
         state = self.audit_manager.finalize_audit_log(state)
 
         return state

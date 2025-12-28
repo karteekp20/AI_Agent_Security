@@ -8,6 +8,12 @@ sentinel/output_guard.py
 sentinel/red_team.py
 sentinel/schemas.py
 sentinel/state_monitor.py
+sentinel/shadow_agents/__init__.py
+sentinel/shadow_agents/base.py
+sentinel/shadow_agents/behavior_analyzer.py
+sentinel/shadow_agents/input_analyzer.py
+sentinel/shadow_agents/output_analyzer.py
+sentinel/shadow_agents/prompts.py
 sentinel_agentic_framework.egg-info/PKG-INFO
 sentinel_agentic_framework.egg-info/SOURCES.txt
 sentinel_agentic_framework.egg-info/dependency_links.txt
@@ -15,3 +21,5 @@ sentinel_agentic_framework.egg-info/entry_points.txt
 sentinel_agentic_framework.egg-info/requires.txt
 sentinel_agentic_framework.egg-info/top_level.txt
 tests/test_example.py
+tests/test_phase1_risk_scoring.py
+tests/test_phase2_shadow_agents.py

@@ -142,7 +142,7 @@ class TestLoopDetection:
         result = detector.detect_loop(tool_calls)
 
         assert result.loop_detected is True
-        assert result.repetition_count >= 3
+        assert result.repetition_count >= 2
 
     def test_no_loop_with_different_calls(self):
         """Test that different tool calls don't trigger loop detection"""

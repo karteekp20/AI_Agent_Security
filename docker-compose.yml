@@ -1,0 +1,219 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Audit Log Persistence
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentinel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentinel_user} -d ${POSTGRES_DB:-sentinel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinel-network
+
+  # Redis - Session State & Caching
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinel-network
+
+  # pgAdmin - PostgreSQL Web UI (Optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sentinel-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@sentinel.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - sentinel-network
+    profiles:
+      - tools
+
+  # Redis Commander - Redis Web UI (Optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sentinel-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - HTTP_USER=${REDIS_COMMANDER_USER:-admin}
+      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    depends_on:
+      - redis
+    networks:
+      - sentinel-network
+    profiles:
+      - tools
+
+  # Sentinel API Server
+  sentinel-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: sentinel-api
+    restart: unless-stopped
+    environment:
+      # API Configuration
+      HOST: ${API_HOST:-0.0.0.0}
+      PORT: ${API_PORT:-8000}
+
+      # PostgreSQL
+      POSTGRES_ENABLED: ${POSTGRES_ENABLED:-true}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_password}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel_user}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+
+      # Redis
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_URL: redis://redis:6379/0
+
+      # Celery
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # JWT Authentication
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+
+      # CORS
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+
+      # Sentinel Configuration
+      ENABLE_PII_DETECTION: ${ENABLE_PII_DETECTION:-true}
+      ENABLE_INJECTION_DETECTION: ${ENABLE_INJECTION_DETECTION:-true}
+      ENABLE_CONTENT_MODERATION: ${ENABLE_CONTENT_MODERATION:-true}
+
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+
+      # Python optimization
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./sentinel:/app/sentinel
+      - ./examples:/app/examples
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sentinel-network
+    command: uvicorn sentinel.saas.server:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker (Background Jobs for Reports)
+  # Disabled until database models are implemented
+  # celery-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile
+  #     target: runtime
+  #   container_name: sentinel-celery
+  #   restart: unless-stopped
+  #   environment:
+  #     # Database
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel_user}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+  #
+  #     # Redis
+  #     REDIS_URL: redis://redis:6379/0
+  #
+  #     # Celery
+  #     CELERY_BROKER_URL: redis://redis:6379/1
+  #     CELERY_RESULT_BACKEND: redis://redis:6379/2
+  #
+  #     # JWT
+  #     JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+  #
+  #     # Python optimization
+  #     PYTHONUNBUFFERED: 1
+  #   volumes:
+  #     - ./sentinel:/app/sentinel
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - sentinel-network
+  #   command: celery -A sentinel.saas.celery_app worker --loglevel=info --concurrency=2
+
+  # Frontend (React Development Server)
+  frontend:
+    image: node:22-alpine
+    container_name: sentinel-frontend
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - sentinel-network
+
+networks:
+  sentinel-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
