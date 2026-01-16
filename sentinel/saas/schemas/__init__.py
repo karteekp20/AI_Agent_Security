@@ -12,6 +12,8 @@ from .auth import (
     RefreshTokenResponse,
     AuthError,
     CurrentUser,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
 )
 from .organization import (
     OrganizationResponse,
@@ -40,6 +42,8 @@ __all__ = [
     "RefreshTokenResponse",
     "AuthError",
     "CurrentUser",
+    "ChangePasswordRequest",
+    "ChangePasswordResponse",
     # Organization
     "OrganizationResponse",
     "OrganizationUpdateRequest",

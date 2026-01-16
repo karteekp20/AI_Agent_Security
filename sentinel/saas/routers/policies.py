@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List, Optional
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 from ..dependencies import get_db, get_current_user, require_role, require_permission
@@ -180,7 +180,7 @@ async def update_policy(
     for field, value in update_data.items():
         setattr(policy, field, value)
 
-    policy.updated_at = datetime.utcnow()
+    policy.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(policy)
@@ -212,7 +212,7 @@ async def delete_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
 
     # Soft delete
-    policy.deleted_at = datetime.utcnow()
+    policy.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
     return None
@@ -313,7 +313,7 @@ async def deploy_policy(
 
     # Update deployment settings
     policy.test_percentage = request.test_percentage
-    policy.deployed_at = datetime.utcnow()
+    policy.deployed_at = datetime.now(timezone.utc)
 
     # Auto-activate if deploying > 0%
     if request.test_percentage > 0:
@@ -384,7 +384,7 @@ async def rollback_policy(
     policy.description = parent.description
     policy.test_percentage = parent.test_percentage
     policy.is_active = parent.is_active
-    policy.updated_at = datetime.utcnow()
+    policy.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(policy)

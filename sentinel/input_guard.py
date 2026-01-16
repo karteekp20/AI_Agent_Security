@@ -39,11 +39,18 @@ class PIIPatterns:
 
     # Credit Cards (PCI)
     CREDIT_CARD = [
-        r'\b(?:4[0-9]{12}(?:[0-9]{3})?)\b',  # Visa
-        r'\b(?:5[1-5][0-9]{14})\b',  # Mastercard
-        r'\b(?:3[47][0-9]{13})\b',  # American Express
-        r'\b(?:6(?:011|5[0-9]{2})[0-9]{12})\b',  # Discover
-    ]
+    # Visa: 13 or 16 digits, starts with 4
+    r'\b4(?:[\s-]?\d){12}(?:[\s-]?\d{3})?\b',
+
+    # Mastercard: starts with 51–55, 16 digits
+    r'\b5[1-5](?:[\s-]?\d){14}\b',
+
+    # American Express: starts with 34 or 37, 15 digits
+    r'\b3[47](?:[\s-]?\d){13}\b',
+
+    # Discover: starts with 6011 or 65xx, 16 digits
+    r'\b6(?:011|5[0-9]{2})(?:[\s-]?\d){12}\b',
+]
 
     # Social Security Number
     SSN = [
@@ -212,7 +219,6 @@ class PIIDetector:
     def detect_pii(self, text: str) -> List[RedactedEntity]:
         """Detect all PII/PCI/PHI entities in text"""
         entities = []
-
         if not self.config.enabled:
             return entities
 
@@ -224,15 +230,44 @@ class PIIDetector:
         if self.config.use_ner:
             entities.extend(self._detect_with_ner(text))
 
+        # Deduplicate overlapping entities (keeps highest confidence)
+        entities = self._deduplicate_entities(entities)
+
         # Sort by position
         entities.sort(key=lambda e: e.start_position)
 
         return entities
+    
+    def _deduplicate_entities(self, entities: List[RedactedEntity]) -> List[RedactedEntity]:
+        """Remove overlapping duplicate entities, keeping highest confidence"""
+        if not entities:
+            return entities
+        
+        # Sort by position and confidence (descending)
+        sorted_entities = sorted(
+            entities, 
+            key=lambda e: (e.start_position, -e.confidence)
+        )
+        
+        deduplicated = []
+        for entity in sorted_entities:
+            # Check if this entity overlaps with any already added
+            overlaps = False
+            for existing in deduplicated:
+                # Check for overlap
+                if not (entity.end_position <= existing.start_position or 
+                        entity.start_position >= existing.end_position):
+                    overlaps = True
+                    break
+            
+            if not overlaps:
+                deduplicated.append(entity)
+        
+        return deduplicated
 
     def _detect_with_regex(self, text: str) -> List[RedactedEntity]:
         """Detect entities using regex patterns"""
         entities = []
-
         for entity_type, patterns in self.entity_patterns.items():
             for pattern in patterns:
                 for match in pattern.finditer(text):
@@ -284,7 +319,7 @@ class PIIDetector:
                     detection_method="ner",
                 )
                 entities.append(entity)
-
+                
         return entities
 
     def _validate_match(self, entity_type: EntityType, value: str) -> bool:
@@ -324,7 +359,7 @@ class PIIDetector:
     def _redact_value(self, value: str, entity_type: EntityType) -> str:
         """Apply redaction strategy to value"""
         strategy = self.config.redaction_strategy
-
+        
         if strategy == RedactionStrategy.MASK:
             if entity_type == EntityType.CREDIT_CARD:
                 # Show first 4 and last 4 digits
@@ -339,8 +374,9 @@ class PIIDetector:
             return f"SHA256:{hashlib.sha256(value.encode()).hexdigest()[:16]}"
 
         elif strategy == RedactionStrategy.TOKEN:
-            # Token generated in RedactedEntity constructor
-            return "[REDACTED]"
+            # Entity-specific token: [ENTITY_TYPE_REDACTED]
+            token = entity_type.value.upper() if isinstance(entity_type, EntityType) else str(entity_type).upper()
+            return f"[{token}_REDACTED]"
 
         elif strategy == RedactionStrategy.REMOVE:
             return ""
@@ -760,7 +796,6 @@ class InputGuardAgent:
         Returns updated state
         """
         user_input = state["user_input"]
-
         # 1. Detect PII/PCI/PHI
         entities = self.pii_detector.detect_pii(user_input)
 

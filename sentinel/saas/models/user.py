@@ -70,6 +70,24 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Password Management
+    password_must_change = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Force user to change password on next login (e.g., temp passwords)"
+    )
+    password_changed_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last time user changed their password"
+    )
+    password_expires_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When temporary password expires (typically 7 days)"
+    )
+
     # Audit timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -79,6 +97,7 @@ class User(Base):
     api_keys = relationship("APIKey", back_populates="created_by_user", foreign_keys="APIKey.created_by")
     policies = relationship("Policy", back_populates="created_by_user", foreign_keys="Policy.created_by")
     reports = relationship("Report", back_populates="generated_by_user", foreign_keys="Report.generated_by")
+    email_logs = relationship("EmailLog", back_populates="user", passive_deletes=True)
 
     # Constraints
     __table_args__ = (

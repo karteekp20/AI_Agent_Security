@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -39,7 +40,8 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # Prioritize DATABASE_URL environment variable over alembic.ini
+    url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -58,8 +60,16 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Prioritize DATABASE_URL environment variable over alembic.ini
+    configuration = config.get_section(config.config_ini_section, {})
+
+    # Override sqlalchemy.url if DATABASE_URL is set
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        configuration["sqlalchemy.url"] = database_url
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

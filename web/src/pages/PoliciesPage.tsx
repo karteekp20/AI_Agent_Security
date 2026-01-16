@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePolicies, useCreatePolicy, useDeletePolicy, useDeployPolicy, useTestPolicy } from '@/hooks/usePolicies';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,9 @@ export function PoliciesPage() {
     is_active: true,
     test_percentage: 0,
   });
+
+  const { data: currentUser } = useCurrentUser();
+  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'owner';
 
   const { data, isLoading, error } = usePolicies();
   const { mutate: createPolicy, isPending: isCreating } = useCreatePolicy();
@@ -154,13 +158,18 @@ export function PoliciesPage() {
             <div>
               <h2 className="text-3xl font-bold">Security Policies</h2>
               <p className="text-muted-foreground mt-1">
-                Manage detection rules and response actions
+                {isAdminOrOwner
+                  ? 'Manage detection rules and response actions'
+                  : 'View security policies (read-only access)'
+                }
               </p>
             </div>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Policy
-            </Button>
+            {isAdminOrOwner && (
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Policy
+              </Button>
+            )}
           </div>
 
           {/* Policies List */}
@@ -171,12 +180,17 @@ export function PoliciesPage() {
                   <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <h3 className="text-lg font-semibold mb-2">No policies yet</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Get started by creating your first security policy
+                    {isAdminOrOwner
+                      ? 'Get started by creating your first security policy'
+                      : 'No security policies have been created yet'
+                    }
                   </p>
-                  <Button onClick={() => setShowCreateDialog(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Policy
-                  </Button>
+                  {isAdminOrOwner && (
+                    <Button onClick={() => setShowCreateDialog(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Policy
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -215,14 +229,16 @@ export function PoliciesPage() {
                         >
                           <TestTube className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(policy.policy_id)}
-                          disabled={isDeleting}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {isAdminOrOwner && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(policy.policy_id)}
+                            disabled={isDeleting}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -263,29 +279,35 @@ export function PoliciesPage() {
                             max={100}
                             step={10}
                             className="flex-1"
+                            disabled={!isAdminOrOwner}
                           />
-                          <Button
-                            size="sm"
-                            onClick={() => handleDeploy(policy.policy_id, deployPercentage)}
-                            disabled={isDeploying}
-                          >
-                            {isDeploying ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : policy.is_active ? (
-                              <>
-                                <Pause className="h-4 w-4 mr-1" />
-                                Update
-                              </>
-                            ) : (
-                              <>
-                                <Play className="h-4 w-4 mr-1" />
-                                Deploy
-                              </>
-                            )}
-                          </Button>
+                          {isAdminOrOwner && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleDeploy(policy.policy_id, deployPercentage)}
+                              disabled={isDeploying}
+                            >
+                              {isDeploying ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : policy.is_active ? (
+                                <>
+                                  <Pause className="h-4 w-4 mr-1" />
+                                  Update
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="h-4 w-4 mr-1" />
+                                  Deploy
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          0% = Disabled | 1-99% = Canary | 100% = Fully Deployed
+                          {isAdminOrOwner
+                            ? '0% = Disabled | 1-99% = Canary | 100% = Fully Deployed'
+                            : 'Read-only access - contact admin to modify'
+                          }
                         </p>
                       </div>
 

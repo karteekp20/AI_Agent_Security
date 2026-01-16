@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuditLogs } from '@/hooks/useAudit';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,10 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Shield, Search, Filter, ChevronLeft, ChevronRight, AlertCircle, Loader2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportAuditLogsToCSV, exportAuditLogsToJSON } from '@/utils/export';
+import { PIIEntitiesTable } from '@/components/audit/PIIEntitiesTable';
+import { InjectionDetailsCard } from '@/components/audit/InjectionDetailsCard';
+import { BlockingReasonsCard } from '@/components/audit/BlockingReasonsCard';
 import type { AuditLog } from '@/api/audit';
 
 export function AuditLogsPage() {
   const navigate = useNavigate();
+  const { data: user } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [blockedOnly, setBlockedOnly] = useState(false);
   const [piiOnly, setPiiOnly] = useState(false);
@@ -22,6 +27,7 @@ export function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const pageSize = 10;
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
 
   const { data, isLoading, error } = useAuditLogs({
     search: search || undefined,
@@ -314,12 +320,13 @@ export function AuditLogsPage() {
           {/* Detail Modal */}
           {selectedLog && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <Card className="max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+              <Card className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                 <CardHeader>
                   <CardTitle>Audit Log Details</CardTitle>
                   <CardDescription>ID: {selectedLog.id}</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                  {/* General Information */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-muted-foreground">Timestamp:</span>
@@ -371,31 +378,63 @@ export function AuditLogsPage() {
                     </div>
                   </div>
 
-                  {selectedLog.pii_detected && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">PII Detection:</span>
-                      <p className="mt-1">
-                        <Badge variant="warning">
-                          {selectedLog.redacted_count} entities redacted
-                        </Badge>
-                      </p>
-                      {selectedLog.pii_entities && (
-                        <pre className="mt-2 p-2 bg-secondary rounded text-xs overflow-x-auto">
-                          {JSON.stringify(selectedLog.pii_entities, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  )}
+                  {/* NEW: Threat Details Section */}
+                  {selectedLog.threat_details && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <h3 className="text-lg font-semibold">Detected Threats</h3>
 
-                  {selectedLog.injection_detected && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">Injection Detection:</span>
-                      <p className="mt-1">
-                        <Badge variant="destructive">
-                          {selectedLog.injection_type || 'Detected'}
-                          {selectedLog.injection_confidence && ` (${(selectedLog.injection_confidence * 100).toFixed(0)}%)`}
-                        </Badge>
-                      </p>
+                      {/* Blocking Reasons */}
+                      <BlockingReasonsCard
+                        reasons={selectedLog.threat_details.blocking_reasons}
+                        blocked={selectedLog.blocked}
+                      />
+
+                      {/* PII Entities */}
+                      {selectedLog.threat_details.pii.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold mb-3">
+                            PII Entities ({selectedLog.threat_details.pii.length})
+                          </h4>
+                          <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50">
+                            <PIIEntitiesTable
+                              entities={selectedLog.threat_details.pii}
+                              showMaskedValues={isAdminOrOwner}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Injection Attempts */}
+                      {selectedLog.threat_details.injections.length > 0 && (
+                        <InjectionDetailsCard injections={selectedLog.threat_details.injections} />
+                      )}
+
+                      {/* Content Violations */}
+                      {selectedLog.threat_details.content_violations.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold mb-2">Content Violations</h4>
+                          <div className="space-y-2">
+                            {selectedLog.threat_details.content_violations.map((violation, idx) => (
+                              <div key={idx} className="p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                                <Badge className="bg-yellow-600">{violation.violation_type}</Badge>
+                                {violation.matched_terms.length > 0 && (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                                    Matched terms: {violation.matched_terms.slice(0, 3).join(', ')}
+                                    {violation.matched_terms.length > 3 && ` +${violation.matched_terms.length - 3} more`}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show summary if no detailed threats */}
+                      {selectedLog.threat_details.total_threat_count === 0 && (
+                        <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                          No threat details available
+                        </div>
+                      )}
                     </div>
                   )}
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Shield, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ThreatEvent } from '@/api/types';
@@ -70,7 +71,27 @@ export function RecentThreats({ threats }: RecentThreatsProps) {
                   <p className="text-sm text-muted-foreground truncate mt-0.5">
                     {threat.user_input}
                   </p>
-                  <div className="flex items-center space-x-4 mt-1">
+                  <div className="flex items-center flex-wrap gap-2 mt-2">
+                    {/* Threat Count Badges */}
+                    {threat.threat_count_by_type && (
+                      <div className="flex items-center gap-1">
+                        {threat.threat_count_by_type.pii && threat.threat_count_by_type.pii > 0 && (
+                          <Badge variant="destructive" className="text-xs">
+                            {threat.threat_count_by_type.pii} PII
+                          </Badge>
+                        )}
+                        {threat.threat_count_by_type.injection && threat.threat_count_by_type.injection > 0 && (
+                          <Badge className="text-xs bg-orange-600">
+                            {threat.threat_count_by_type.injection} Injection
+                          </Badge>
+                        )}
+                        {threat.threat_count_by_type.content_violation && threat.threat_count_by_type.content_violation > 0 && (
+                          <Badge className="text-xs bg-yellow-600">
+                            {threat.threat_count_by_type.content_violation} Violation
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                     <span className="text-xs">
                       Risk: <span className="font-medium">{threat.risk_score.toFixed(2)}</span>
                     </span>

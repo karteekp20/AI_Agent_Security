@@ -42,11 +42,17 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       // Invalidate and refetch current user
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-      // Navigate to dashboard
-      navigate('/dashboard');
+
+      // Check if password change is required
+      if (response.password_change_required) {
+        navigate('/change-password?required=true');
+      } else {
+        // Navigate to dashboard
+        navigate('/dashboard');
+      }
     },
   });
 }

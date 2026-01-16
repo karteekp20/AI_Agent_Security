@@ -6,7 +6,7 @@ CRUD operations for API key management
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 import secrets
 import hashlib
@@ -306,7 +306,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=400, detail="API key already revoked")
 
     # Soft delete (revoke)
-    api_key.revoked_at = datetime.utcnow()
+    api_key.revoked_at = datetime.now(timezone.utc)
     api_key.is_active = False
 
     db.commit()

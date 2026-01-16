@@ -24,3 +24,15 @@ export function useRecentThreats(limit: number = 50) {
     staleTime: 5000, // Consider data stale after 5 seconds
   });
 }
+
+/**
+ * Hook to fetch threat breakdown statistics
+ */
+export function useThreatBreakdown(timeframe: string = '24h') {
+  return useQuery({
+    queryKey: ['threatBreakdown', timeframe],
+    queryFn: () => dashboardApi.getThreatBreakdown(timeframe),
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 20000, // Consider data stale after 20 seconds
+  });
+}

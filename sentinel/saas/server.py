@@ -410,8 +410,7 @@ async def process_input(
 
         if original_entities:
             # Extract entity types and values
-            redacted_entities = [
-                {
+            redacted_entities = [                {
                     "entity_type": entity.get("entity_type") if isinstance(entity, dict) else getattr(entity, "entity_type", "unknown"),
                     "value": entity.get("value") if isinstance(entity, dict) else getattr(entity, "value", ""),
                     "start": entity.get("start", 0) if isinstance(entity, dict) else getattr(entity, "start", 0),
@@ -466,6 +465,8 @@ async def process_input(
             "request_id": state_dict.get("request_id"),
             "request_context": state_dict.get("request_context", {}),
             "user_input": req.user_input,
+            "redacted_input": result_state.get("redacted_input", ""),
+            "org_id": str(org_id),
             "blocked": result_state.get("blocked", False),
             "aggregated_risk": {"overall_risk_score": max_risk, "overall_risk_level": "high" if max_risk > 0.7 else "medium" if max_risk > 0.4 else "low"},
             "pii_detected": pii_detected,
@@ -480,6 +481,7 @@ async def process_input(
                 "workspace_id": str(workspace_id) if workspace_id else None,
             },
         }
+        print('Audit Log Data:', audit_log_data)
         app.state.postgres.save_audit_log(audit_log_data)
 
     # Update organization API request count
@@ -549,8 +551,8 @@ async def process_input(
     pii_count = audit_log.get("pii_redactions", 0)
     pii_detected = pii_count > 0
     injection_detected = audit_log.get("injection_attempts", 0) > 0
-    redacted_input = req.user_input if not pii_detected else "[PII Redacted]"
-
+    #redacted_input = req.user_input if not pii_detected else "[PII Redacted]"
+    redacted_input = result_state.get("redacted_input", req.user_input)
     return ProcessResponse(
         allowed=not result_state.get("blocked", False),
         redacted_input=redacted_input,

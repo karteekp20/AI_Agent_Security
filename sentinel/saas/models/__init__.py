@@ -15,6 +15,7 @@ from .api_key import APIKey
 from .policy import Policy
 from .report import Report
 from .subscription import Subscription
+from .email_log import EmailLog
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "Policy",
     "Report",
     "Subscription",
+    "EmailLog",
 ]

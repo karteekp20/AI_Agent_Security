@@ -6,17 +6,35 @@ Secure token generation and validation using jose library
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from uuid import UUID
+import os
 
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
 
 # JWT Configuration
-# In production, load these from environment variables
-SECRET_KEY = "your-secret-key-change-this-in-production"  # TODO: Load from env
+# Load from environment variables
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+# Validate secret key
+if not SECRET_KEY:
+    raise ValueError(
+        "JWT_SECRET_KEY environment variable not set. Generate a secure key with:\n"
+        "python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
+
+if len(SECRET_KEY) < 32:
+    raise ValueError(
+        "JWT_SECRET_KEY must be at least 32 characters for security. "
+        "Current length: {}".format(len(SECRET_KEY))
+    )
+
+# Support key rotation (optional previous key for validating old tokens)
+SECRET_KEY_PREVIOUS = os.getenv("JWT_SECRET_KEY_PREVIOUS")
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 
 class TokenData(BaseModel):

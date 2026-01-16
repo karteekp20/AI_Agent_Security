@@ -40,9 +40,10 @@ FROM python:3.11-slim as runtime
 
 WORKDIR /app
 
-# Install runtime dependencies (PostgreSQL client library + curl for healthcheck)
+# Install runtime dependencies (PostgreSQL client library + curl for healthcheck + pg_isready)
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    postgresql-client \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -52,11 +53,17 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy application code
 COPY sentinel/ ./sentinel/
 COPY examples/ ./examples/
+COPY migrations/ ./migrations/
+COPY alembic.ini .
 COPY pyproject.toml .
 COPY README.md .
 
 # Set PATH to use Poetry virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy and setup entrypoint script
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Create non-root user
 RUN useradd -m -u 1000 sentinel && chown -R sentinel:sentinel /app
@@ -75,6 +82,9 @@ EXPOSE 9090
 # Health check - test API endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Set entrypoint to run migrations before starting app
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Default command (SaaS API server)
 CMD ["python", "-m", "uvicorn", "sentinel.saas.server:app", "--host", "0.0.0.0", "--port", "8000"]

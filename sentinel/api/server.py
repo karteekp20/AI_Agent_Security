@@ -304,6 +304,7 @@ async def process_input(
 
     Requires X-API-Key header for authentication
     """
+    print("Start Server processing request...")
     start_time = time.time()
     logger = app.state.logger
 
@@ -311,7 +312,7 @@ async def process_input(
     from fastapi import Header
     from typing import Optional
     x_api_key = request.headers.get("x-api-key")
-
+    print('X-API-Key:', x_api_key)
     # Get org_id and workspace_id from API key
     org_id = None
     workspace_id = None
@@ -327,14 +328,14 @@ async def process_input(
                 workspace_id = key_data.get("workspace_id")
         finally:
             db.close()
-
+    print('org_id, workspace_id:', org_id, workspace_id)
     # Rate limiting
     if app.state.rate_limiter:
         user_id = req.user_id or "anonymous"
         ip_address = req.ip_address or request.client.host
 
         allowed, reason = app.state.rate_limiter.check_rate_limit(
-            user_id=user_id,
+            user_id=user_id, 
             ip_address=ip_address,
         )
 
@@ -354,7 +355,7 @@ async def process_input(
         metadata=req.metadata or {},
         session_id=req.session_id,  # Use provided session_id or auto-generate
     )
-
+    print('Initial state:', state)
     session_id = state["session_id"]
 
     # Demo agent executor - simulates an AI agent
@@ -394,7 +395,7 @@ async def process_input(
             agent_executor=demo_agent  # Pass the demo agent
         )
         result_state = result
-
+    print('Result state:', result_state)
     # Collect metrics
     if app.state.metrics:
         collector = MetricsCollector(app.state.metrics)
@@ -412,7 +413,7 @@ async def process_input(
     # Save to Redis (session state)
     if app.state.redis and app.state.redis.enabled:
         app.state.redis.save_session_state(session_id, result_state, ttl=3600)
-
+    pii_detected = pii_count > 0
     # Save to PostgreSQL (audit log)
     if app.state.postgres and app.state.postgres.enabled:
         threats = result_state.get("threats", [])
@@ -426,7 +427,7 @@ async def process_input(
             metadata["org_id"] = str(org_id)
         if workspace_id:
             metadata["workspace_id"] = str(workspace_id)
-
+        print('metadata for audit log:', metadata)
         audit_log_data = {
             "timestamp": state["request_context"]["timestamp"],
             "session_id": session_id,
@@ -435,8 +436,8 @@ async def process_input(
             "user_input": req.user_input,
             "blocked": result_state.get("blocked", False),
             "aggregated_risk": {"overall_risk_score": max_risk},
-            "pii_detected": False,
-            "redacted_entities": [],
+            "pii_detected": pii_detected,
+            "redacted_entities": result_state.get("original_entities", []),
             "injection_detected": result_state.get("blocked", False),
             "injection_details": None,
             "escalated": False,
@@ -462,7 +463,7 @@ async def process_input(
             blocked=True,
             layer="gateway",
         )
-
+  
     # Calculate processing time
     processing_time_ms = (time.time() - start_time) * 1000
 
@@ -485,15 +486,30 @@ async def process_input(
     # Extract injection detection from audit log
     injection_detected = audit_log.get("injection_attempts", 0) > 0
 
-    # Get redacted input (if PII was detected, show redacted version; otherwise original)
-    # The agent response contains the redacted input in its text
-    redacted_input = req.user_input if not pii_detected else "[PII Redacted]"
-
+    # Get redacted input from the state (already properly redacted by input guard)
+    print('result_state:', result_state)
+    redacted_input = result_state.get("redacted_input", req.user_input)
+    # Get risk score from input guard risk scores
+    # Priority: risk_scores from input_guard layer > aggregated_risk > threats
+    final_risk_score = 0.0
+    risk_scores = result_state.get("risk_scores", [])
+    
+    # Find the input_guard risk score
+    for risk_score in risk_scores:
+        if risk_score.get("layer") == "input_guard":
+            final_risk_score = risk_score.get("risk_score", 0.0)
+            break
+    
+    # Fallback to aggregated risk if no input_guard score
+    if final_risk_score == 0.0:
+        aggregated_risk = result_state.get("aggregated_risk", {})
+        final_risk_score = aggregated_risk.get("overall_risk_score", max_risk_score)
+    print('redacted_input##### :', redacted_input)
     return ProcessResponse(
         allowed=not result_state.get("blocked", False),
-        redacted_input=redacted_input,
-        risk_score=max_risk_score,
-        risk_level="high" if max_risk_score > 0.7 else "medium" if max_risk_score > 0.4 else "low",
+        redacted_input=redacted_input, 
+        risk_score=final_risk_score,
+        risk_level="high" if final_risk_score > 0.7 else "medium" if final_risk_score > 0.4 else "low",
         blocked=result_state.get("blocked", False),
         block_reason="Security threat detected" if result_state.get("blocked") else None,
         pii_detected=pii_detected,

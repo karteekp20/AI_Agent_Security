@@ -3,8 +3,10 @@ Organization Management Router - Organization and User Management
 FastAPI endpoints for organization settings and user management
 """
 
+import os
 import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -28,6 +30,7 @@ from ..schemas import (
 )
 from ..auth import hash_password
 from ..models import User, Organization
+from ..tasks.email_tasks import send_email_task
 
 
 router = APIRouter(prefix="/orgs", tags=["Organizations"])
@@ -276,6 +279,9 @@ def invite_user_to_organization(
         permissions=request.permissions,
         is_active=True,
         email_verified=False,  # User needs to verify email
+        # Password management - force change on first login
+        password_must_change=True,  # User must change temp password
+        password_expires_at=datetime.now(timezone.utc) + timedelta(days=7),  # Temp password expires in 7 days
     )
 
     db.add(new_user)
@@ -286,7 +292,26 @@ def invite_user_to_organization(
     db.commit()
     db.refresh(new_user)
 
-    # TODO: Send invitation email with temporary password
+    # Send invitation email asynchronously
+    try:
+        send_email_task.delay(
+            template_name="invitation",
+            to_email=new_user.email,
+            context={
+                "user_name": new_user.full_name,
+                "org_name": org.org_name,
+                "inviter_name": current_user.full_name,
+                "temporary_password": temp_password,
+                "login_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/login",
+                "expires_hours": 24,
+            },
+            org_id=str(org.org_id),
+            user_id=str(new_user.user_id),
+        )
+    except Exception as e:
+        # Log error but don't fail the invitation
+        # The user is created, they just won't receive the email
+        print(f"Warning: Failed to queue invitation email for {new_user.email}: {e}")
 
     return InviteUserResponse(
         user_id=new_user.user_id,

@@ -75,6 +75,7 @@ class Organization(Base):
     policies = relationship("Policy", back_populates="organization", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="organization", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="organization", cascade="all, delete-orphan")
+    email_logs = relationship("EmailLog", back_populates="organization", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Organization {self.org_slug} ({self.subscription_tier})>"

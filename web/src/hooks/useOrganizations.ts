@@ -31,7 +31,16 @@ export interface User {
 
 export interface InviteUserRequest {
   email: string;
+  full_name: string;
   role: string;
+}
+
+export interface InviteUserResponse {
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  temporary_password: string;
 }
 
 // ============================================================================
@@ -40,21 +49,22 @@ export interface InviteUserRequest {
 
 const organizationsApi = {
   getOrganization: async (): Promise<Organization> => {
-    const response = await apiClient.get<Organization>('/orgs/current');
+    const response = await apiClient.get<Organization>('/orgs/me');
     return response.data;
   },
 
   getOrganizationUsers: async (): Promise<User[]> => {
-    const response = await apiClient.get<User[]>('/orgs/current/users');
+    const response = await apiClient.get<User[]>('/orgs/me/users');
     return response.data;
   },
 
-  inviteUser: async (data: InviteUserRequest): Promise<void> => {
-    await apiClient.post('/orgs/current/invite', data);
+  inviteUser: async (data: InviteUserRequest): Promise<InviteUserResponse> => {
+    const response = await apiClient.post<InviteUserResponse>('/orgs/me/users/invite', data);
+    return response.data;
   },
 
   removeUser: async (userId: string): Promise<void> => {
-    await apiClient.delete(`/orgs/current/users/${userId}`);
+    await apiClient.delete(`/orgs/me/users/${userId}`);
   },
 };
 

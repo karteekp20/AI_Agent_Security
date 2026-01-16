@@ -3,6 +3,7 @@
  */
 
 import { apiClient } from './client';
+import type { ThreatDetails } from './types';
 
 export interface AuditLog {
   id: number;
@@ -28,6 +29,7 @@ export interface AuditLog {
   escalated: boolean;
   escalated_to?: string;
   metadata?: Record<string, any>;
+  threat_details?: ThreatDetails;
 }
 
 export interface AuditLogListResponse {

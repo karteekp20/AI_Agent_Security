@@ -3,8 +3,48 @@ Audit Log Schemas - Request/Response Models
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+
+
+# ============================================================================
+# THREAT DETAILS SCHEMAS
+# ============================================================================
+
+class PIIEntityDetail(BaseModel):
+    """Detailed PII entity information for display"""
+    entity_type: str
+    masked_value: Optional[str] = None  # Only for admin/owner users
+    redaction_strategy: str
+    start_position: int
+    end_position: int
+    confidence: float
+    detection_method: str
+    token_id: str
+
+
+class InjectionDetail(BaseModel):
+    """Injection attempt details"""
+    injection_type: str
+    confidence: float
+    matched_patterns: List[str] = Field(default_factory=list)
+    severity: str
+
+
+class ContentViolationDetail(BaseModel):
+    """Content policy violations"""
+    violation_type: str
+    matched_terms: List[str] = Field(default_factory=list)
+    severity: str
+
+
+class ThreatDetails(BaseModel):
+    """Complete threat information structure"""
+    pii: List[PIIEntityDetail] = Field(default_factory=list)
+    injections: List[InjectionDetail] = Field(default_factory=list)
+    content_violations: List[ContentViolationDetail] = Field(default_factory=list)
+    total_threat_count: int = 0
+    blocking_reasons: List[str] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -36,6 +76,7 @@ class AuditLogResponse(BaseModel):
     escalated: bool
     escalated_to: Optional[str]
     metadata: Optional[dict]
+    threat_details: Optional[ThreatDetails] = None
 
     class Config:
         from_attributes = True

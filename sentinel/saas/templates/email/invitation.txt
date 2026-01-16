@@ -1,0 +1,35 @@
+WELCOME TO {{ org_name | upper }}!
+
+Hi {{ user_name }},
+
+{{ inviter_name }} has invited you to join {{ org_name }} on Sentinel Security Platform.
+
+WHAT'S SENTINEL?
+Sentinel is an enterprise-grade AI security platform that protects your LLM applications from threats, detects PII/PCI data, prevents injection attacks, and ensures compliance with GDPR, HIPAA, and PCI-DSS.
+
+GET STARTED
+To get started, log in using your email address and the temporary password below:
+
+Temporary Password: {{ temporary_password }}
+
+Login URL: {{ login_url }}
+
+IMPORTANT:
+• This temporary password will expire in {{ expires_hours }} hours
+• You'll be prompted to change your password after first login
+• Keep this password secure and don't share it with anyone
+
+WHAT YOU CAN DO WITH SENTINEL:
+• Monitor real-time security threats and PII detections
+• Configure custom security policies for your organization
+• Generate compliance reports (PCI-DSS, GDPR, HIPAA, SOC 2)
+• View detailed audit logs and security analytics
+
+If you didn't expect this invitation, you can safely ignore this email.
+
+Best regards,
+The Sentinel Team
+
+---
+© {{ year }} Sentinel Security. All rights reserved.
+Need help? Contact us at {{ support_email }}

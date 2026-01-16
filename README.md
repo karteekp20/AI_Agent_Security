@@ -815,12 +815,50 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Quick Links
+## Documentation
 
-- 📚 [Full Documentation](ARCHITECTURE_ENHANCED.md)
-- 🚀 [Quick Start Guide](QUICK_START.md)
-- 🏗️ [Implementation Guide](IMPLEMENTATION_GUIDE.md)
-- 📊 [Project Summary](PROJECT_SUMMARY.md)
+All project documentation is organized in the `/docs` directory:
+
+### Essential Documentation
+- 📖 **[Quick Start](HOW_TO_RUN.md)** - Get running in 5 minutes
+- ✅ **[TODO](TODO.md)** - Active tasks and security audit checklist
+
+### Organized Documentation (`/docs`)
+
+#### API & Technical Reference
+- **[API Documentation](docs/api/API_DOCUMENTATION_INDEX.md)** - Complete API endpoint reference
+- **[API Flow Documentation](docs/api/API_FLOW_DOCUMENTATION.md)** - Request/response flows
+
+#### Business & Strategy
+- **[Executive Summary](docs/business/EXECUTIVE_SUMMARY_FOR_STARTUP.md)** - Investor-ready pitch deck
+- **[Startup Transformation Guide](docs/business/STARTUP_TRANSFORMATION_GUIDE.md)** - 12-month roadmap to Series A
+- **[Business Overview](docs/business/BUSINESS_OVERVIEW.md)** - Business model and opportunity
+- **[Documentation Guide](docs/business/HOW_TO_USE_THESE_DOCUMENTS.md)** - Navigation for all roles
+
+#### Deployment & Operations
+- **[Production Deployment Guide](docs/deployment/PRODUCTION_DEPLOYMENT_GUIDE.md)** - AWS/cloud deployment
+- **[Docker Quick Start](docs/deployment/DOCKER_QUICK_START.md)** - Docker containerization
+- **[Development Guide](docs/deployment/DEVELOPMENT_GUIDE.md)** - Development workflow
+- **[Database Setup](docs/deployment/DATABASE_SETUP.md)** - PostgreSQL setup and migrations
+- **[Poetry Setup](docs/deployment/POETRY_SETUP.md)** - Python dependency management
+- **[Architecture](docs/deployment/ARCHITECTURE_ENHANCED.md)** - System architecture and design
+- **[Project Files Guide](docs/deployment/PROJECT_FILES_GUIDE.md)** - File structure reference
+- **[Implementation Guide](docs/deployment/IMPLEMENTATION_GUIDE.md)** - Feature implementation steps
+
+#### Compliance & Security
+- **[PII Detection Status](docs/compliance/PII_DETECTION_STATUS.md)** - PII detection capabilities and coverage
+
+#### Testing
+- **[Testing Guide](docs/testing/TESTING_GUIDE.md)** - Testing methodology and procedures
+- **[Test PII Now](docs/testing/TEST_PII_NOW.md)** - PII detection test cases
+
+#### Roadmap & Planning
+- **[Master Roadmap](docs/roadmap/PROJECT_ROADMAP_AND_NEXT_STEPS.md)** - 12-month roadmap (YOUR NORTH STAR)
+- **[Technical Roadmap](docs/roadmap/TECHNICAL_IMPLEMENTATION_ROADMAP.md)** - Month-by-month technical plan
+
+#### Historical Archive
+- **[Phase Completions](docs/archive/phases/)** - Phase 1-4 completion summaries
+- **[Analysis Reports](docs/archive/analysis/)** - Historical analysis and issue reports
 
 ---
 

@@ -9,6 +9,8 @@ import type {
   RefreshTokenRequest,
   RefreshTokenResponse,
   CurrentUser,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
 } from './types';
 
 /**
@@ -74,4 +76,12 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
 export const logout = () => {
   clearAuthTokens();
   window.location.href = '/login';
+};
+
+/**
+ * Change user password
+ */
+export const changePassword = async (data: ChangePasswordRequest): Promise<ChangePasswordResponse> => {
+  const response = await apiClient.post<ChangePasswordResponse>('/auth/change-password', data);
+  return response.data;
 };

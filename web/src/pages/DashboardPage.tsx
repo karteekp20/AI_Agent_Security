@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
-import { useDashboardMetrics, useRecentThreats } from '@/hooks/useDashboard';
+import { useDashboardMetrics, useRecentThreats, useThreatBreakdown } from '@/hooks/useDashboard';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Shield, LogOut, Loader2, Activity, AlertTriangle, Eye, TrendingUp } from 'lucide-react';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { RiskScoreChart } from '@/components/dashboard/RiskScoreChart';
@@ -15,6 +16,7 @@ import { AttackTimingChart } from '@/components/dashboard/AttackTimingChart';
 import { DetectionRateGauge } from '@/components/dashboard/DetectionRateGauge';
 import { TimeframeSelector } from '@/components/dashboard/TimeframeSelector';
 import { RecentThreats } from '@/components/dashboard/RecentThreats';
+import { ThreatBreakdownCard } from '@/components/dashboard/ThreatBreakdownCard';
 
 export function DashboardPage() {
   const [timeframe, setTimeframe] = useState('24h');
@@ -22,6 +24,7 @@ export function DashboardPage() {
   const { data: user, isLoading: userLoading } = useCurrentUser();
   const { data: metrics, isLoading: metricsLoading, error: metricsError } = useDashboardMetrics(timeframe);
   const { data: threats, isLoading: threatsLoading } = useRecentThreats(50);
+  const { data: threatBreakdown, isLoading: breakdownLoading } = useThreatBreakdown(timeframe);
   const { mutate: logout } = useLogout();
 
   if (userLoading) {
@@ -48,6 +51,9 @@ export function DashboardPage() {
             <div className="text-sm text-right hidden md:block">
               <div className="font-medium">{user?.full_name}</div>
               <div className="text-muted-foreground">{user?.email}</div>
+              <Badge variant="outline" className="mt-1">
+                {user?.role?.toUpperCase()}
+              </Badge>
             </div>
             <Button variant="outline" size="sm" onClick={() => logout()}>
               <LogOut className="h-4 w-4 mr-2" />
@@ -157,6 +163,13 @@ export function DashboardPage() {
                     avgRiskScore={metrics.avg_risk_score}
                   />
                 )}
+
+                {/* NEW: Threat Breakdown Card */}
+                <ThreatBreakdownCard
+                  data={threatBreakdown || null}
+                  timeframe={timeframe}
+                  isLoading={breakdownLoading}
+                />
 
                 {/* Row 3: User & Timing Analysis */}
                 {metrics?.top_affected_users && metrics.top_affected_users.length > 0 && (

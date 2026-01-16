@@ -230,7 +230,7 @@ class ResponseSanitizer:
         2. Removing malicious content
         3. Ensuring original redacted entities stay redacted
         """
-
+        print("Sanitizing response...")
         # Detect any new PII in the response
         new_entities = self.pii_detector.detect_pii(response)
 

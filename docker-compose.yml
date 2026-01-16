@@ -86,6 +86,17 @@ services:
     profiles:
       - tools
 
+  # MailHog - Email Testing (Development)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: sentinel-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - sentinel-network
+
   # Sentinel API Server
   sentinel-api:
     build:
@@ -139,11 +150,14 @@ services:
 
       # Python optimization
       PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./sentinel:/app/sentinel
       - ./examples:/app/examples
+      - ./migrations:/app/migrations
+      - ./alembic.ini:/app/alembic.ini
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,43 +165,59 @@ services:
         condition: service_healthy
     networks:
       - sentinel-network
-    command: uvicorn sentinel.saas.server:app --host 0.0.0.0 --port 8000 --reload
+    command: ["uvicorn", "sentinel.saas.server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-  # Celery Worker (Background Jobs for Reports)
-  # Disabled until database models are implemented
-  # celery-worker:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Dockerfile
-  #     target: runtime
-  #   container_name: sentinel-celery
-  #   restart: unless-stopped
-  #   environment:
-  #     # Database
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel_user}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
-  #
-  #     # Redis
-  #     REDIS_URL: redis://redis:6379/0
-  #
-  #     # Celery
-  #     CELERY_BROKER_URL: redis://redis:6379/1
-  #     CELERY_RESULT_BACKEND: redis://redis:6379/2
-  #
-  #     # JWT
-  #     JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
-  #
-  #     # Python optimization
-  #     PYTHONUNBUFFERED: 1
-  #   volumes:
-  #     - ./sentinel:/app/sentinel
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - sentinel-network
-  #   command: celery -A sentinel.saas.celery_app worker --loglevel=info --concurrency=2
+  # Celery Worker (Background Jobs for Email & Reports)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: sentinel-celery
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel_user}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # Celery
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+
+      # Email Configuration
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_LOGO_URL: ${EMAIL_LOGO_URL:-https://sentinel.ai/logo.png}
+      EMAIL_SUPPORT_EMAIL: ${EMAIL_SUPPORT_EMAIL:-support@sentinel.ai}
+
+      # AWS SES (for production)
+      AWS_SES_REGION: ${AWS_SES_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+      # Python optimization
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./sentinel:/app/sentinel
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    networks:
+      - sentinel-network
+    command: celery -A sentinel.saas.celery_app worker --loglevel=info --concurrency=2
 
   # Frontend (React Development Server)
   frontend:
@@ -201,8 +231,9 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./web:/app
-      - /app/node_modules
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+  # - /app/node_modules
+    # command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm install && npx vite --force --host 0.0.0.0"
     networks:
       - sentinel-network
 

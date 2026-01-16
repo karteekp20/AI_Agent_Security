@@ -64,6 +64,7 @@ class LoginResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    password_change_required: bool = False
 
 
 # Token Refresh Schemas
@@ -101,3 +102,38 @@ class CurrentUser(BaseModel):
 
     class Config:
         from_attributes = True  # Allow ORM model conversion
+
+
+# Password Change Schemas
+
+class ChangePasswordRequest(BaseModel):
+    """Password change request"""
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
+    confirm_password: str = Field(..., description="Confirm new password")
+
+    @validator("confirm_password")
+    def passwords_match(cls, v, values):
+        """Validate that new password and confirmation match"""
+        if "new_password" in values and v != values["new_password"]:
+            raise ValueError("Passwords do not match")
+        return v
+
+    @validator("new_password")
+    def validate_password_strength(cls, v):
+        """Validate password strength"""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class ChangePasswordResponse(BaseModel):
+    """Password change response"""
+    success: bool = True
+    message: str = "Password changed successfully"

@@ -593,6 +593,9 @@ class SentinelGateway:
             "risk_scores": state.get("risk_scores", []),  # Phase 1 addition
             "aggregated_risk": state.get("aggregated_risk"),  # Phase 1 addition
             "shadow_agent_escalated": state.get("shadow_agent_escalated", False),  # Phase 1/2 addition
+            "redacted_input": state.get("redacted_input"),  # PII redaction - entity-specific tokens
+            "original_entities": state.get("original_entities", []),  # Original PII entities detected
+            "pii_detected": state.get("audit_log", {}).get("pii_redactions", 0) > 0,
         }
 
     def _invoke_with_langgraph(

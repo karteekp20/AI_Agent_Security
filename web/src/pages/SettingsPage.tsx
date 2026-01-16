@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrganization, useOrganizationUsers, useInviteUser, useRemoveUser } from '@/hooks/useOrganizations';
 import { useAPIKeys, useCreateAPIKey, useRevokeAPIKey } from '@/hooks/useAPIKeys';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,12 +13,19 @@ import { cn } from '@/lib/utils';
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'organization' | 'users' | 'api-keys'>('organization');
+  const [activeTab, setActiveTab] = useState<'organization' | 'users' | 'api-keys' | 'security'>('organization');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFullName, setInviteFullName] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [newKeyName, setNewKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [tempPasswordData, setTempPasswordData] = useState<{ email: string; password: string } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  const { data: currentUser } = useCurrentUser();
+  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'owner';
 
   const { data: orgData, isLoading: orgLoading } = useOrganization();
   const { data: usersData, isLoading: usersLoading } = useOrganizationUsers();
@@ -29,23 +37,47 @@ export function SettingsPage() {
   const { mutate: revokeAPIKey, isPending: isRevokingKey } = useRevokeAPIKey();
 
   const handleInviteUser = () => {
+    if (!inviteFullName.trim()) {
+      alert('Please enter the user\'s full name');
+      return;
+    }
+
     if (!inviteEmail.trim()) {
       alert('Please enter an email address');
       return;
     }
 
     inviteUser(
-      { email: inviteEmail, role: inviteRole },
+      { email: inviteEmail, full_name: inviteFullName, role: inviteRole },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          setTempPasswordData({
+            email: inviteEmail,
+            password: data.temporary_password
+          });
+          setShowPasswordModal(true);
           setInviteEmail('');
-          alert('User invited successfully');
+          setInviteFullName('');
         },
         onError: (error: any) => {
           alert(`Failed to invite user: ${error.response?.data?.detail || error.message}`);
         },
       }
     );
+  };
+
+  const handleCopyPassword = () => {
+    if (tempPasswordData) {
+      navigator.clipboard.writeText(tempPasswordData.password);
+      setPasswordCopied(true);
+      setTimeout(() => setPasswordCopied(false), 2000);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowPasswordModal(false);
+    setTempPasswordData(null);
+    setPasswordCopied(false);
   };
 
   const handleRemoveUser = (userId: string, email: string) => {
@@ -160,6 +192,18 @@ export function SettingsPage() {
               <Key className="h-4 w-4 inline mr-2" />
               API Keys
             </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={cn(
+                'px-4 py-2 font-medium border-b-2 transition-colors',
+                activeTab === 'security'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Shield className="h-4 w-4 inline mr-2" />
+              Security
+            </button>
           </div>
 
           {/* Organization Tab */}
@@ -239,22 +283,34 @@ export function SettingsPage() {
           {activeTab === 'users' && (
             <div className="space-y-4">
               {/* Invite User Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Invite User</CardTitle>
-                  <CardDescription>Send an invitation to join your organization</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Email Address</Label>
-                      <Input
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="user@example.com"
-                        className="mt-1"
-                      />
+              {isAdminOrOwner ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Invite User</CardTitle>
+                    <CardDescription>Send an invitation to join your organization</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Full Name</Label>
+                        <Input
+                          type="text"
+                          value={inviteFullName}
+                          onChange={(e) => setInviteFullName(e.target.value)}
+                          placeholder="John Doe"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>Email Address</Label>
+                        <Input
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
                     <div>
                       <Label>Role</Label>
@@ -268,22 +324,33 @@ export function SettingsPage() {
                         <option value="admin">Admin</option>
                       </select>
                     </div>
-                  </div>
-                  <Button onClick={handleInviteUser} disabled={isInviting}>
-                    {isInviting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Send Invitation
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
+                    <Button onClick={handleInviteUser} disabled={isInviting}>
+                      {isInviting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Send Invitation
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Invite User</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      You don't have permission to invite users. Contact your administrator.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Users List */}
               <Card>
@@ -317,7 +384,7 @@ export function SettingsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRemoveUser(user.user_id, user.email)}
-                              disabled={isRemoving || user.role === 'owner'}
+                              disabled={!isAdminOrOwner || isRemoving || user.role === 'owner'}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -328,6 +395,63 @@ export function SettingsPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Temporary Password Modal */}
+              {showPasswordModal && tempPasswordData && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <Card className="max-w-md w-full">
+                    <CardHeader className="bg-green-50 dark:bg-green-950/20">
+                      <CardTitle className="flex items-center text-green-700 dark:text-green-400">
+                        <Check className="h-5 w-5 mr-2" />
+                        User Invited Successfully
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 pt-6">
+                      <div>
+                        <Label>Email</Label>
+                        <p className="text-sm font-mono mt-1">{tempPasswordData.email}</p>
+                      </div>
+
+                      <div>
+                        <Label>Temporary Password</Label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="flex-1 p-3 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono">
+                            {tempPasswordData.password}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCopyPassword}
+                          >
+                            {passwordCopied ? (
+                              <>
+                                <Check className="h-4 w-4 mr-1" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-4 w-4 mr-1" />
+                                Copy
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 rounded text-sm">
+                        <p className="text-yellow-800 dark:text-yellow-400">
+                          <strong>Important:</strong> Share this password securely with the user.
+                          They will need to change it on first login. An invitation email has also been sent.
+                        </p>
+                      </div>
+
+                      <Button onClick={handleCloseModal} className="w-full">
+                        Close
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           )}
 
@@ -335,61 +459,77 @@ export function SettingsPage() {
           {activeTab === 'api-keys' && (
             <div className="space-y-4">
               {/* Create API Key Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Create API Key</CardTitle>
-                  <CardDescription>Generate a new API key for programmatic access</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label>Key Name</Label>
-                    <Input
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      placeholder="Production API Key"
-                      className="mt-1"
-                    />
-                  </div>
-                  <Button onClick={handleCreateAPIKey} disabled={isCreatingKey}>
-                    {isCreatingKey ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Generate API Key
-                      </>
-                    )}
-                  </Button>
+              {isAdminOrOwner ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Create API Key</CardTitle>
+                    <CardDescription>Generate a new API key for programmatic access</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label>Key Name</Label>
+                      <Input
+                        value={newKeyName}
+                        onChange={(e) => setNewKeyName(e.target.value)}
+                        placeholder="Production API Key"
+                        className="mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleCreateAPIKey} disabled={isCreatingKey}>
+                      {isCreatingKey ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Generate API Key
+                        </>
+                      )}
+                    </Button>
 
-                  {/* Show created key */}
-                  {createdKey && (
-                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="font-medium text-yellow-900 dark:text-yellow-100">
-                            Save your API key now!
-                          </p>
-                          <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                            You won't be able to see it again. Store it securely.
-                          </p>
-                          <div className="mt-3 flex items-center gap-2">
-                            <code className="flex-1 p-2 bg-white dark:bg-slate-900 rounded border font-mono text-sm break-all">
-                              {createdKey}
-                            </code>
-                            <Button variant="outline" size="sm" onClick={handleCopyKey}>
-                              {copiedKey ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                            </Button>
+                    {/* Show created key */}
+                    {createdKey && (
+                      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-medium text-yellow-900 dark:text-yellow-100">
+                              Save your API key now!
+                            </p>
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                              You won't be able to see it again. Store it securely.
+                            </p>
+                            <div className="mt-3 flex items-center gap-2">
+                              <code className="flex-1 p-2 bg-white dark:bg-slate-900 rounded border font-mono text-sm break-all">
+                                {createdKey}
+                              </code>
+                              <Button variant="outline" size="sm" onClick={handleCopyKey}>
+                                {copiedKey ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Create API Key</CardTitle>
+                    <CardDescription>Generate a new API key for programmatic access</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        You don't have permission to create API keys. Contact your organization administrator.
+                      </p>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* API Keys List */}
               <Card>
@@ -430,7 +570,7 @@ export function SettingsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRevokeAPIKey(key.key_id, key.key_name || '')}
-                              disabled={isRevokingKey || !key.is_active}
+                              disabled={isRevokingKey || !key.is_active || !isAdminOrOwner}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -439,6 +579,72 @@ export function SettingsPage() {
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Security Tab */}
+          {activeTab === 'security' && (
+            <div className="space-y-4">
+              {/* Password Change Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Change Password</CardTitle>
+                  <CardDescription>
+                    Update your account password. Make sure to use a strong password with at least 8 characters.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={() => navigate('/change-password')}
+                    className="w-full sm:w-auto"
+                  >
+                    <Shield className="h-4 w-4 mr-2" />
+                    Change Password
+                  </Button>
+                  <p className="text-sm text-muted-foreground mt-4">
+                    You'll be redirected to a secure page to change your password.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Account Security Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Account Security</CardTitle>
+                  <CardDescription>
+                    Security recommendations for your account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Strong Password</p>
+                      <p className="text-sm text-muted-foreground">
+                        Use a password with at least 8 characters, including uppercase, lowercase, and numbers.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Regular Updates</p>
+                      <p className="text-sm text-muted-foreground">
+                        Change your password regularly and never reuse passwords across different services.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Temporary Passwords</p>
+                      <p className="text-sm text-muted-foreground">
+                        If you received a temporary password during invitation, make sure to change it immediately.
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>

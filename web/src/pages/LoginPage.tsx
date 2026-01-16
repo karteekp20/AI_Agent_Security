@@ -47,7 +47,7 @@ export function LoginPage() {
               <Shield className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Welcome to Sentinel</CardTitle>
+          <CardTitle className="text-2xl font-bold">Welcome to Sentinel Hello World</CardTitle>
           <CardDescription>
             Sign in to your account to continue
           </CardDescription>

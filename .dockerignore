@@ -1,0 +1,135 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+
+# Linting
+.flake8
+.pylint
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+redis_data/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Documentation
+docs/_build/
+site/
+
+# Node (for frontend)
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+.next/
+
+# Cache
+.cache/
+.pytest_cache/
+celery_beat_schedule
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Docker
+docker/README.md
+Dockerfile*
+docker-compose*.yml
+
+# Project specific (but keep what Dockerfile needs)
+tests/
+docs/
+kubernetes/
+.claude/
+ISSUE_ANALYSIS_AND_FIXES.md
+FIXES_IMPLEMENTED.md
+PROJECT_FILES_GUIDE.md
+DEVELOPMENT_GUIDE.md
+HOW_TO_RUN.md
+PHASE_*.md
+ANSWER_TO_PII_QUESTION.txt
+*.md
+!README.md
+
+# Keep essential files
+!pyproject.toml
+!poetry.lock
+!requirements.txt
+!alembic.ini
+!migrations/
+!examples/
+!docker/entrypoint.sh

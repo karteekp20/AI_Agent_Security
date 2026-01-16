@@ -11,7 +11,14 @@ from uuid import UUID
 
 from ..dependencies import get_db, get_current_user
 from ..models import User
-from ..schemas.audit import AuditLogResponse, AuditLogListResponse
+from ..schemas.audit import (
+    AuditLogResponse,
+    AuditLogListResponse,
+    ThreatDetails,
+    PIIEntityDetail,
+    InjectionDetail,
+    ContentViolationDetail,
+)
 from ...storage.postgres_adapter import PostgreSQLAdapter, PostgreSQLConfig
 
 router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
@@ -36,6 +43,173 @@ def get_postgres_adapter(db: Session) -> Optional[PostgreSQLAdapter]:
     except Exception as e:
         print(f"Failed to create PostgreSQL adapter: {e}")
         return None
+
+
+def build_threat_details(log: dict, user_role: str) -> ThreatDetails:
+    """
+    Build structured threat details from audit log JSONB data.
+    Apply role-based masking for sensitive values.
+
+    Args:
+        log: Audit log dictionary from database
+        user_role: Current user's role (for determining masked value visibility)
+
+    Returns:
+        ThreatDetails object with structured threat information
+    """
+    threat_details = ThreatDetails(
+        pii=[],
+        injections=[],
+        content_violations=[],
+        total_threat_count=0,
+        blocking_reasons=[]
+    )
+
+    # Process PII entities from pii_entities JSONB field
+    if log.get("pii_entities"):
+        for entity in log["pii_entities"]:
+            try:
+                pii_detail = PIIEntityDetail(
+                    entity_type=entity.get("entity_type", "unknown"),
+                    redaction_strategy=entity.get("redaction_strategy", "token"),
+                    start_position=entity.get("start_position", 0),
+                    end_position=entity.get("end_position", 0),
+                    confidence=entity.get("confidence", 0.0),
+                    detection_method=entity.get("detection_method", "regex"),
+                    token_id=entity.get("token_id", ""),
+                )
+
+                # Admin/owner can see masked values
+                if user_role in ["admin", "owner"] and entity.get("redaction_strategy") == "mask":
+                    pii_detail.masked_value = entity.get("redacted_value")
+
+                threat_details.pii.append(pii_detail)
+                threat_details.total_threat_count += 1
+            except Exception as e:
+                print(f"Error processing PII entity: {e}")
+                continue
+
+    # Process injection attempts
+    if log.get("injection_detected"):
+        try:
+            # Extract matched patterns from metadata
+            metadata = log.get("metadata") or {}
+            matched_patterns = metadata.get("injection_patterns", [])
+
+            injection = InjectionDetail(
+                injection_type=log.get("injection_type", "unknown"),
+                confidence=log.get("injection_confidence", 0.0),
+                matched_patterns=matched_patterns if isinstance(matched_patterns, list) else [],
+                severity="high" if log.get("injection_confidence", 0) > 0.8 else "medium"
+            )
+            threat_details.injections.append(injection)
+            threat_details.total_threat_count += 1
+        except Exception as e:
+            print(f"Error processing injection detail: {e}")
+
+    # Process content violations (if present in metadata)
+    metadata = log.get("metadata") or {}
+    if metadata.get("content_violations"):
+        try:
+            for violation in metadata["content_violations"]:
+                content_violation = ContentViolationDetail(
+                    violation_type=violation.get("type", "unknown"),
+                    matched_terms=violation.get("terms", []),
+                    severity=violation.get("severity", "medium")
+                )
+                threat_details.content_violations.append(content_violation)
+                threat_details.total_threat_count += 1
+        except Exception as e:
+            print(f"Error processing content violations: {e}")
+
+    # Build blocking reasons
+    if log.get("blocked"):
+        if threat_details.pii:
+            # Get unique entity types
+            entity_types = list(set(p.entity_type for p in threat_details.pii))
+            types_str = ", ".join(entity_types[:3])
+            if len(entity_types) > 3:
+                types_str += f", +{len(entity_types) - 3} more"
+
+            threat_details.blocking_reasons.append(
+                f"PII detected ({len(threat_details.pii)} instances): {types_str}"
+            )
+
+        if threat_details.injections:
+            for inj in threat_details.injections:
+                threat_details.blocking_reasons.append(
+                    f"{inj.injection_type.upper()} injection detected (confidence: {inj.confidence:.2f})"
+                )
+
+        if threat_details.content_violations:
+            for violation in threat_details.content_violations:
+                threat_details.blocking_reasons.append(
+                    f"Content violation: {violation.violation_type}"
+                )
+
+        # If no specific reasons but blocked, add generic reason
+        if not threat_details.blocking_reasons:
+            risk_score = log.get("risk_score", 0)
+            if risk_score > 0.8:
+                threat_details.blocking_reasons.append(
+                    f"High risk score: {risk_score:.2f}"
+                )
+
+    return threat_details
+
+
+def mask_user_input_for_role(
+    user_input: str,
+    pii_entities: Optional[list],
+    user_role: str
+) -> str:
+    """
+    Mask PII in user_input based on user role.
+
+    - admin/owner: See original text
+    - viewer/member/auditor: See fully redacted text with tokens
+
+    Args:
+        user_input: Original user input text
+        pii_entities: List of detected PII entities with positions
+        user_role: Current user's role
+
+    Returns:
+        Masked user input (or original for admin/owner)
+    """
+    if user_role in ["admin", "owner"]:
+        return user_input  # Full access for admins
+
+    if not pii_entities:
+        return user_input  # No PII to mask
+
+    # For viewers: Replace PII with redaction tokens
+    masked_text = user_input
+
+    # Sort entities by position (reverse order to maintain positions during replacement)
+    try:
+        sorted_entities = sorted(
+            pii_entities,
+            key=lambda e: e.get("start_position", 0),
+            reverse=True
+        )
+
+        for entity in sorted_entities:
+            start = entity.get("start_position")
+            end = entity.get("end_position")
+            entity_type = entity.get("entity_type", "SENSITIVE")
+
+            if start is not None and end is not None and start < end <= len(masked_text):
+                # Replace with redaction token
+                token = f"[{entity_type.upper()}_REDACTED]"
+                masked_text = masked_text[:start] + token + masked_text[end:]
+
+    except Exception as e:
+        print(f"Error masking user input: {e}")
+        # Return original on error (for admins) or generic message (for viewers)
+        return user_input if user_role in ["admin", "owner"] else "[REDACTED_INPUT]"
+
+    return masked_text
 
 
 # ============================================================================
@@ -124,6 +298,9 @@ async def list_audit_logs(
     # Convert to response models
     logs = []
     for log in paginated_logs:
+        # Build threat details with role-based masking
+        threat_details = build_threat_details(log, current_user.role)
+
         logs.append(AuditLogResponse(
             id=log.get("id"),
             timestamp=log.get("timestamp"),
@@ -134,7 +311,11 @@ async def list_audit_logs(
             user_id=log.get("user_id"),
             user_role=log.get("user_role"),
             ip_address=log.get("ip_address"),
-            user_input=log.get("user_input", ""),
+            user_input=mask_user_input_for_role(
+                log.get("user_input", ""),
+                log.get("pii_entities"),
+                current_user.role
+            ),
             input_length=log.get("input_length", 0),
             blocked=log.get("blocked", False),
             risk_score=log.get("risk_score"),
@@ -148,6 +329,7 @@ async def list_audit_logs(
             escalated=log.get("escalated", False),
             escalated_to=log.get("escalated_to"),
             metadata=log.get("metadata"),
+            threat_details=threat_details,
         ))
 
     return AuditLogListResponse(
@@ -185,6 +367,9 @@ async def get_audit_log(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Audit log not found")
 
+    # Build threat details with role-based masking
+    threat_details = build_threat_details(log, current_user.role)
+
     return AuditLogResponse(
         id=log.get("id"),
         timestamp=log.get("timestamp"),
@@ -195,7 +380,11 @@ async def get_audit_log(
         user_id=log.get("user_id"),
         user_role=log.get("user_role"),
         ip_address=log.get("ip_address"),
-        user_input=log.get("user_input", ""),
+        user_input=mask_user_input_for_role(
+            log.get("user_input", ""),
+            log.get("pii_entities"),
+            current_user.role
+        ),
         input_length=log.get("input_length", 0),
         blocked=log.get("blocked", False),
         risk_score=log.get("risk_score"),
@@ -209,4 +398,5 @@ async def get_audit_log(
         escalated=log.get("escalated", False),
         escalated_to=log.get("escalated_to"),
         metadata=log.get("metadata"),
+        threat_details=threat_details,
     )

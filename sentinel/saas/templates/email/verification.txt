@@ -1,0 +1,22 @@
+VERIFY YOUR EMAIL ADDRESS
+
+Hi {{ user_name }},
+
+Thanks for signing up for Sentinel! To complete your registration and start protecting your AI applications, please verify your email address.
+
+VERIFY YOUR EMAIL:
+{{ verification_url }}
+
+WHY VERIFY YOUR EMAIL?
+Email verification helps us ensure the security of your account and enables important notifications about security events and compliance reports.
+
+⏱️ This link will expire in 24 hours.
+
+If you didn't create an account with Sentinel, you can safely ignore this email.
+
+Best regards,
+The Sentinel Team
+
+---
+© {{ year }} Sentinel Security. All rights reserved.
+Need help? Contact us at {{ support_email }}

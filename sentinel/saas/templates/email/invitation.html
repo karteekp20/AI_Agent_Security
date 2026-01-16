@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}You've been invited to {{ org_name }}{% endblock %}
+
+{% block content %}
+<h2>Welcome to {{ org_name }}!</h2>
+
+<p>Hi {{ user_name }},</p>
+
+<p>{{ inviter_name }} has invited you to join <strong>{{ org_name }}</strong> on Sentinel Security Platform.</p>
+
+<div class="info-box">
+    <p><strong>What's Sentinel?</strong></p>
+    <p>Sentinel is an enterprise-grade AI security platform that protects your LLM applications from threats, detects PII/PCI data, prevents injection attacks, and ensures compliance with GDPR, HIPAA, and PCI-DSS.</p>
+</div>
+
+<p>To get started, log in using your email address and the temporary password below:</p>
+
+<div class="code-box">
+    {{ temporary_password }}
+</div>
+
+<p style="text-align: center;">
+    <a href="{{ login_url }}" class="button">Log In to Sentinel</a>
+</p>
+
+<div class="info-box">
+    <p><strong>⚠️ Important:</strong></p>
+    <p>• This temporary password will expire in {{ expires_hours }} hours</p>
+    <p>• You'll be prompted to change your password after first login</p>
+    <p>• Keep this password secure and don't share it with anyone</p>
+</div>
+
+<div class="divider"></div>
+
+<p><strong>What you can do with Sentinel:</strong></p>
+<ul style="color: #555;">
+    <li>Monitor real-time security threats and PII detections</li>
+    <li>Configure custom security policies for your organization</li>
+    <li>Generate compliance reports (PCI-DSS, GDPR, HIPAA, SOC 2)</li>
+    <li>View detailed audit logs and security analytics</li>
+</ul>
+
+<p>If you didn't expect this invitation, you can safely ignore this email.</p>
+
+<p>Best regards,<br>The Sentinel Team</p>
+{% endblock %}

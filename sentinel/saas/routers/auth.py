@@ -3,9 +3,10 @@ Authentication Router - User Registration, Login, Token Refresh
 FastAPI endpoints for authentication
 """
 
+import os
 import uuid
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db, get_current_user
@@ -17,6 +18,8 @@ from ..schemas import (
     RefreshTokenRequest,
     RefreshTokenResponse,
     CurrentUser,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
 )
 from ..auth import (
     hash_password,
@@ -26,6 +29,8 @@ from ..auth import (
     verify_token,
 )
 from ..models import User, Organization, Workspace
+from ..services.email_service import generate_verification_token, verify_verification_token
+from ..tasks.email_tasks import send_email_task
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -138,6 +143,25 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(org)
     db.refresh(workspace)
 
+    # Send email verification asynchronously
+    try:
+        verification_token = generate_verification_token(str(user.user_id), user.email)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+        send_email_task.delay(
+            template_name="verification",
+            to_email=user.email,
+            context={
+                "user_name": user.full_name,
+                "verification_url": f"{frontend_url}/verify-email?token={verification_token}",
+            },
+            org_id=str(org.org_id),
+            user_id=str(user.user_id),
+        )
+    except Exception as e:
+        # Log error but don't fail registration
+        print(f"Warning: Failed to queue verification email for {user.email}: {e}")
+
     # Generate JWT tokens
     access_token = create_access_token(
         user_id=user.user_id,
@@ -227,8 +251,15 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # Update last login timestamp
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now(timezone.utc)
     db.commit()
+
+    # Check if password change is required
+    password_change_required = user.password_must_change or False
+
+    # Check if temporary password has expired
+    if user.password_expires_at and user.password_expires_at < datetime.now(timezone.utc):
+        password_change_required = True
 
     # Generate JWT tokens
     access_token = create_access_token(
@@ -253,6 +284,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         org_name=org.org_name,
         access_token=access_token,
         refresh_token=refresh_token,
+        password_change_required=password_change_required,
     )
 
 
@@ -328,3 +360,152 @@ def get_current_user_info(current_user: CurrentUser = Depends(get_current_user))
     ```
     """
     return current_user
+
+
+@router.post("/verify-email")
+def verify_email(token: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Verify user email address
+
+    **Flow:**
+    1. Decode and verify JWT token
+    2. Find user by ID
+    3. Update email_verified flag
+    4. Return success message
+
+    **Query Parameters:**
+    - token: JWT verification token from email link
+
+    **Response:**
+    ```json
+    {
+      "success": true,
+      "message": "Email verified successfully"
+    }
+    ```
+    """
+    try:
+        # Verify token and extract payload
+        token_data = verify_verification_token(token)
+
+        # Find user
+        user = db.query(User).filter(User.user_id == uuid.UUID(token_data["user_id"])).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Verify email matches
+        if user.email != token_data["email"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email mismatch"
+            )
+
+        # Check if already verified
+        if user.email_verified:
+            return {
+                "success": True,
+                "message": "Email already verified"
+            }
+
+        # Update email verification status
+        user.email_verified = True
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Email verified successfully"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid or expired verification token: {str(e)}"
+        )
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+def change_password(
+    request: ChangePasswordRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change user password
+
+    Allows authenticated users to change their password.
+    Required for:
+    - Regular password changes
+    - Forced password changes after first login with temp password
+    - Security best practices (periodic password rotation)
+
+    **Flow:**
+    1. Verify current password
+    2. Validate new password strength
+    3. Update password hash
+    4. Set password_changed_at timestamp
+    5. Clear password_must_change flag if set
+
+    **Request Body:**
+    ```json
+    {
+      "current_password": "OldPass123",
+      "new_password": "NewPass456",
+      "confirm_password": "NewPass456"
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+      "success": true,
+      "message": "Password changed successfully"
+    }
+    ```
+
+    **Errors:**
+    - 400: Invalid current password
+    - 400: Password validation failed
+    - 404: User not found
+    - 401: Not authenticated
+    """
+    # Find user
+    user = db.query(User).filter(User.user_id == current_user.user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Verify current password
+    if not verify_password(request.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Check new password is different from current
+    if verify_password(request.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password"
+        )
+
+    # Update password
+    user.password_hash = hash_password(request.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
+
+    # Clear forced password change flag
+    user.password_must_change = False
+    user.password_expires_at = None
+
+    db.commit()
+
+    return ChangePasswordResponse(
+        success=True,
+        message="Password changed successfully"
+    )
