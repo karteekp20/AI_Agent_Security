@@ -69,19 +69,25 @@ def build_threat_details(log: dict, user_role: str) -> ThreatDetails:
     if log.get("pii_entities"):
         for entity in log["pii_entities"]:
             try:
+                # Skip if missing critical position data
+                if "start_position" not in entity or "end_position" not in entity:
+                    continue
                 pii_detail = PIIEntityDetail(
                     entity_type=entity.get("entity_type", "unknown"),
                     redaction_strategy=entity.get("redaction_strategy", "token"),
-                    start_position=entity.get("start_position", 0),
-                    end_position=entity.get("end_position", 0),
-                    confidence=entity.get("confidence", 0.0),
+                    start_position=entity["start_position"],
+                    end_position=entity["end_position"],
+                    confidence=entity.get("confidence", 0.85),
                     detection_method=entity.get("detection_method", "regex"),
                     token_id=entity.get("token_id", ""),
                 )
-
-                # Admin/owner can see masked values
-                if user_role in ["admin", "owner"] and entity.get("redaction_strategy") == "mask":
-                    pii_detail.masked_value = entity.get("redacted_value")
+                # Set masked_value based on role
+                if user_role in ["admin", "owner"]:
+                    # Admin/owner see original values (for auditing)
+                    pii_detail.masked_value = entity.get("original_value", "[UNKNOWN]")
+                else:
+                    # Viewer/member/auditor see redacted values
+                    pii_detail.masked_value = entity.get("redacted_value", f"[{entity.get('entity_type', 'UNKNOWN').upper()}_REDACTED]")
 
                 threat_details.pii.append(pii_detail)
                 threat_details.total_threat_count += 1
@@ -198,8 +204,13 @@ def mask_user_input_for_role(
             start = entity.get("start_position")
             end = entity.get("end_position")
             entity_type = entity.get("entity_type", "SENSITIVE")
+            if start is None or end is None:
+                original = entity.get("original_value", "")
+                if original and original in masked_text:
+                    start = masked_text.find(original)
+                    end = start + len(original)
 
-            if start is not None and end is not None and start < end <= len(masked_text):
+            if start is not None and end is not None and 0 <= start < end <= len(masked_text):
                 # Replace with redaction token
                 token = f"[{entity_type.upper()}_REDACTED]"
                 masked_text = masked_text[:start] + token + masked_text[end:]

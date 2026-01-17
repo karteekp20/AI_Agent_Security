@@ -410,12 +410,19 @@ async def process_input(
 
         if original_entities:
             # Extract entity types and values
-            redacted_entities = [                {
-                    "entity_type": entity.get("entity_type") if isinstance(entity, dict) else getattr(entity, "entity_type", "unknown"),
-                    "value": entity.get("value") if isinstance(entity, dict) else getattr(entity, "value", ""),
-                    "start": entity.get("start", 0) if isinstance(entity, dict) else getattr(entity, "start", 0),
-                    "end": entity.get("end", 0) if isinstance(entity, dict) else getattr(entity, "end", 0),
-                }
+            redacted_entities = [                
+                {
+        "entity_type": entity.get("entity_type") if isinstance(entity, dict) else getattr(entity, "entity_type", "unknown"),
+        "original_value": entity.get("original_value") if isinstance(entity, dict) else getattr(entity, "original_value", ""),
+        "redacted_value": entity.get("redacted_value") if isinstance(entity, dict) else getattr(entity, "redacted_value", ""),
+        "start_position": entity.get("start_position") if isinstance(entity, dict) else getattr(entity, "start_position", 0),
+        "end_position": entity.get("end_position") if isinstance(entity, dict) else getattr(entity, "end_position", 0),
+        "confidence": entity.get("confidence") if isinstance(entity, dict) else getattr(entity, "confidence", 0.0),
+        "detection_method": entity.get("detection_method") if isinstance(entity, dict) else getattr(entity, "detection_method", "regex"),
+        "redaction_strategy": entity.get("redaction_strategy") if isinstance(entity, dict) else getattr(entity, "redaction_strategy", "token"),
+        "token_id": entity.get("token_id") if isinstance(entity, dict) else getattr(entity, "token_id", ""),
+    }
+
                 for entity in original_entities
             ]
 

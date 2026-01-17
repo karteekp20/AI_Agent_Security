@@ -147,6 +147,19 @@ class PIIPatterns:
         r'\b[-+]?(?:[1-8]?\d(?:\.\d+)?|90(?:\.0+)?),\s*[-+]?(?:180(?:\.0+)?|(?:1[0-7]\d|[1-9]?\d)(?:\.\d+)?)\b',
     ]
 
+    # Date of Birth Patterns (add to PIIPatterns class)
+
+    # DD-MM-YYYY or DD/MM/YYYY
+    DATE_OF_BIRTH = [
+    # DD-MM-YYYY or DD/MM/YYYY
+    r'\b(?:0?[1-9]|[12][0-9]|3[01])[-/](?:0?[1-9]|1[0-2])[-/](?:19|20)\d{2}\b',
+    # MM-DD-YYYY or MM/DD/YYYY
+    r'\b(?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12][0-9]|3[01])[-/](?:19|20)\d{2}\b',
+    # YYYY-MM-DD or YYYY/MM/DD
+    r'\b(?:19|20)\d{2}[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12][0-9]|3[01])\b',
+    # Date with text context
+    r'\b(?:DOB|dob|birth|born|birthday)[\s:]*(?:0?[1-9]|[12][0-9]|3[01])[-/](?:0?[1-9]|1[0-2])[-/](?:19|20)\d{2}\b',
+    ]
 
 class PIIDetector:
     """Detects and redacts PII/PCI/PHI from text"""
@@ -206,6 +219,10 @@ class PIIDetector:
 
             # Phase 1.7: Geographic expansions
             EntityType.COORDINATES: PIIPatterns.COORDINATES,
+
+            # Date of Birth (ADD THIS LINE)
+            EntityType.DATE_OF_BIRTH: PIIPatterns.DATE_OF_BIRTH,
+
         }
 
         for entity_type in self.config.entity_types:
