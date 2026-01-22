@@ -1,0 +1,271 @@
+# Prometheus Alert Rules for Sentinel AI Security Platform
+
+groups:
+  # ============================================
+  # API Server Alerts
+  # ============================================
+  - name: sentinel-api
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          service: sentinel-api
+          category: availability
+        annotations:
+          summary: "High error rate detected on Sentinel API"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes (threshold: 1%)"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: sentinel-api
+          category: performance
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile latency is {{ $value | humanizeDuration }} (threshold: 500ms)"
+
+      - alert: HighLatencyCritical
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: critical
+          service: sentinel-api
+          category: performance
+        annotations:
+          summary: "Critical API latency detected"
+          description: "99th percentile latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+      - alert: APIDown
+        expr: up{job="sentinel-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: sentinel-api
+          category: availability
+        annotations:
+          summary: "Sentinel API is down"
+          description: "Sentinel API has been unreachable for more than 1 minute"
+
+      - alert: HighRequestRate
+        expr: rate(http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: sentinel-api
+          category: performance
+        annotations:
+          summary: "High request rate detected"
+          description: "Request rate is {{ $value | humanize }} requests/second"
+
+  # ============================================
+  # Security Alerts
+  # ============================================
+  - name: sentinel-security
+    rules:
+      - alert: HighThreatDetectionRate
+        expr: rate(threats_detected_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: sentinel-api
+          category: security
+        annotations:
+          summary: "High threat detection rate"
+          description: "{{ $value | humanize }} threats detected per second in the last 5 minutes"
+
+      - alert: CriticalThreatDetected
+        expr: increase(threats_detected_total{severity="critical"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: sentinel-api
+          category: security
+        annotations:
+          summary: "Critical threat detected"
+          description: "{{ $value }} critical threats detected in the last 5 minutes"
+
+      - alert: PIILeakageDetected
+        expr: increase(pii_detections_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: sentinel-api
+          category: security
+        annotations:
+          summary: "High PII detection rate"
+          description: "{{ $value }} PII detections in the last 5 minutes"
+
+      - alert: InjectionAttemptsDetected
+        expr: rate(injection_attempts_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: critical
+          service: sentinel-api
+          category: security
+        annotations:
+          summary: "Injection attacks detected"
+          description: "{{ $value | humanize }} injection attempts per second"
+
+  # ============================================
+  # Container/Resource Alerts
+  # ============================================
+  - name: sentinel-resources
+    rules:
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Container {{ $labels.container_name }} memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "Container {{ $labels.container_name }} CPU usage is {{ $value | humanizePercentage }}"
+
+      - alert: ContainerRestarting
+        expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          category: availability
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.container }} has restarted {{ $value }} times in the last hour"
+
+  # ============================================
+  # Database Alerts
+  # ============================================
+  - name: sentinel-database
+    rules:
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: postgres
+          category: database
+        annotations:
+          summary: "Database connections near limit"
+          description: "{{ $value | humanizePercentage }} of max connections used"
+
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+          category: availability
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL has been unreachable for more than 1 minute"
+
+      - alert: DatabaseSlowQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+          category: performance
+        annotations:
+          summary: "Long-running database queries detected"
+          description: "Queries running longer than 5 minutes detected"
+
+      - alert: DatabaseHighReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+          category: database
+        annotations:
+          summary: "High database replication lag"
+          description: "Replication lag is {{ $value }} seconds"
+
+  # ============================================
+  # Redis Alerts
+  # ============================================
+  - name: sentinel-redis
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          category: availability
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been unreachable for more than 1 minute"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          category: resources
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: redis
+          category: availability
+        annotations:
+          summary: "Redis rejected connections"
+          description: "{{ $value }} connections rejected in the last 5 minutes"
+
+  # ============================================
+  # Celery/Background Jobs Alerts
+  # ============================================
+  - name: sentinel-celery
+    rules:
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: celery
+          category: performance
+        annotations:
+          summary: "Celery queue backlog"
+          description: "Celery queue has {{ $value }} pending tasks"
+
+      - alert: CeleryWorkerDown
+        expr: celery_workers_count < 1
+        for: 2m
+        labels:
+          severity: critical
+          service: celery
+          category: availability
+        annotations:
+          summary: "No Celery workers available"
+          description: "All Celery workers are down"
+
+      - alert: CeleryTaskFailureRate
+        expr: rate(celery_task_failed_total[5m]) / rate(celery_task_received_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: celery
+          category: reliability
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "{{ $value | humanizePercentage }} of Celery tasks are failing"

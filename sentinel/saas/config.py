@@ -45,11 +45,17 @@ class CORSConfig(BaseModel):
     """CORS Configuration for Web Dashboard"""
     allowed_origins: list = [
         "http://localhost:3000",  # React dev server
-        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5173",  # Vite dev server (original)
+        "http://localhost:5174",  # Vite dev server (fallback)
+        "http://localhost:5175",  # Vite dev server (extra fallback)
+        "http://127.0.0.1:3000",  # React dev server (localhost alias)
+        "http://127.0.0.1:5173",  # Vite dev server (localhost alias)
+        "http://127.0.0.1:5174",  # Vite dev server (localhost alias)
+        "http://127.0.0.1:5175",  # Vite dev server (localhost alias)
         os.getenv("FRONTEND_URL", "https://app.sentinel.ai"),
     ]
     allow_credentials: bool = True
-    allow_methods: list = ["*"]
+    allow_methods: list = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     allow_headers: list = ["*"]
 
 

@@ -29,7 +29,12 @@ from sentinel.resilience import RateLimiter, RateLimitConfig
 # SaaS Components
 from .config import config as saas_config
 from .dependencies import get_db, get_api_key_user, get_current_user
-from .routers import auth_router, organizations_router, workspaces_router, dashboard_router, policies_router, audit_router, api_keys_router, reports_router
+from .routers import (
+    auth_router, organizations_router, workspaces_router,
+    dashboard_router, policies_router, audit_router,
+    api_keys_router, reports_router,
+    ml_router, webhooks_router, integrations_router, ab_tests_router
+)
 from .models import Organization
 from sqlalchemy.orm import Session
 
@@ -102,7 +107,12 @@ def create_saas_app() -> FastAPI:
         allow_credentials=saas_config.cors.allow_credentials,
         allow_methods=saas_config.cors.allow_methods,
         allow_headers=saas_config.cors.allow_headers,
+        expose_headers=["*"],
     )
+    
+    # Log CORS configuration
+    logger_temp = get_logger("saas-cors")
+    logger_temp.info(f"CORS enabled for origins: {saas_config.cors.allowed_origins}")
 
     # ========================================================================
     # INITIALIZE COMPONENTS
@@ -181,16 +191,23 @@ def create_saas_app() -> FastAPI:
     # INCLUDE SAAS ROUTERS
     # ========================================================================
 
-    app.include_router(auth_router)
-    app.include_router(organizations_router)
-    app.include_router(workspaces_router)
-    app.include_router(dashboard_router)
-    app.include_router(policies_router)
-    app.include_router(audit_router)
-    app.include_router(api_keys_router)
-    app.include_router(reports_router)
+    api_prefix = "/api/v1"
+    app.include_router(auth_router, prefix=api_prefix)
+    app.include_router(organizations_router, prefix=api_prefix)
+    app.include_router(workspaces_router, prefix=api_prefix)
+    app.include_router(dashboard_router, prefix=api_prefix)
+    app.include_router(policies_router, prefix=api_prefix)
+    app.include_router(audit_router, prefix=api_prefix)
+    app.include_router(api_keys_router, prefix=api_prefix)
+    app.include_router(reports_router, prefix=api_prefix)
 
-    logger.info("✓ SaaS management routes registered")
+    # NEW ROUTERS - Month 3-4 Features
+    app.include_router(ml_router, prefix=api_prefix)
+    app.include_router(webhooks_router, prefix=api_prefix)
+    app.include_router(integrations_router, prefix=api_prefix)
+    app.include_router(ab_tests_router, prefix=api_prefix)
+
+    logger.info(f"✓ SaaS management routes registered at {api_prefix}")
 
     return app
 

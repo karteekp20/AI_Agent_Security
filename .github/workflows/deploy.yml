@@ -1,0 +1,118 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get latest image tag
+        id: get-image
+        run: |
+          IMAGE_TAG=$(aws ecr describe-images --repository-name sentinel/api --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' --output text)
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update ECS Task Definition
+        id: task-def
+        run: |
+          # Get current task definition
+          aws ecs describe-task-definition --task-definition sentinel-api --query taskDefinition > task-def.json
+
+          # Update image tag
+          jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/sentinel/api:${{ steps.get-image.outputs.IMAGE_TAG }}" \
+            '.containerDefinitions[0].image = $IMAGE' task-def.json > new-task-def.json
+
+          # Register new task definition
+          aws ecs register-task-definition --cli-input-json file://new-task-def.json
+
+      - name: Update API Service
+        run: |
+          aws ecs update-service \
+            --cluster sentinel-${{ inputs.environment }} \
+            --service sentinel-api \
+            --force-new-deployment
+
+      - name: Update Celery Worker Service
+        run: |
+          aws ecs update-service \
+            --cluster sentinel-${{ inputs.environment }} \
+            --service sentinel-celery \
+            --force-new-deployment
+
+      - name: Wait for services to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster sentinel-${{ inputs.environment }} \
+            --services sentinel-api sentinel-celery
+
+      - name: Run database migrations
+        run: |
+          aws ecs run-task \
+            --cluster sentinel-${{ inputs.environment }} \
+            --task-definition sentinel-migrations \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PRIVATE_SUBNET_IDS }}],securityGroups=[${{ secrets.ECS_SG_ID }}],assignPublicIp=DISABLED}"
+
+      - name: Wait for migration to complete
+        run: |
+          sleep 60
+
+      - name: Smoke test
+        run: |
+          # Get ALB DNS name
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names sentinel-${{ inputs.environment }}-alb --query 'LoadBalancers[0].DNSName' --output text)
+
+          # Test health endpoint
+          curl -f http://$ALB_DNS/health || exit 1
+
+          echo "Deployment successful!"
+
+      - name: Notify Slack on Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: ':white_check_mark: Deployment to ${{ inputs.environment }} succeeded!'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+      - name: Notify Slack on Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: ':x: Deployment to ${{ inputs.environment }} failed!'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "Deployment failed. Consider running rollback..."
+          # aws ecs update-service --cluster sentinel-${{ inputs.environment }} --service sentinel-api --task-definition sentinel-api:PREVIOUS_VERSION

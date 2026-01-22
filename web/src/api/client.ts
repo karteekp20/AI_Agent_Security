@@ -1,7 +1,12 @@
 import axios, { AxiosError } from 'axios';
+import type { AxiosRequestConfig } from 'axios';
 
 // API base URL - default to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+// Debug: Log the actual API URL being used
+console.log('🔌 API Base URL:', API_BASE_URL);
+console.log('📍 VITE_API_URL env:', import.meta.env.VITE_API_URL);
 
 // Create axios instance with default config
 export const apiClient = axios.create({
@@ -15,6 +20,7 @@ export const apiClient = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
+    console.log('📤 Request URL:', config.url, 'Full:', `${config.baseURL}${config.url}`);
     const token = localStorage.getItem('access_token');
 
     if (token && config.headers) {
@@ -32,7 +38,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
     // If unauthorized and not already retried, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -46,7 +52,10 @@ apiClient.interceptors.response.use(
         }
 
         // Attempt to refresh the access token
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        // const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        //   refresh_token: refreshToken,
+        // });
+        const response =  await apiClient.post('/auth/refresh', {
           refresh_token: refreshToken,
         });
 

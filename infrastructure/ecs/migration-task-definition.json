@@ -1,0 +1,38 @@
+{
+  "family": "sentinel-migrations",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/sentinelEcsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "migrations",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/sentinel/api:latest",
+      "essential": true,
+      "command": ["alembic", "upgrade", "head"],
+      "environment": [
+        {"name": "ENVIRONMENT", "value": "production"}
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/database-url"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sentinel-migrations",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {"key": "Environment", "value": "production"},
+    {"key": "Project", "value": "sentinel"}
+  ]
+}

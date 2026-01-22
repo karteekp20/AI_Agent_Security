@@ -11,6 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Shield, Plus, Trash2, Play, Pause, TestTube, Loader2, AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Policy } from '@/api/types';
+import { TemplateBrowser } from '@/components/policies/TemplateBrowser';
+import { VersionHistory } from '@/components/policies/VersionHistory';
+import { ABTestWizard } from '@/components/policies/ABTestWizard';
+import { DSLEditor } from '@/components/policies/DSLEditor';
 
 export function PoliciesPage() {
   const navigate = useNavigate();
@@ -18,6 +22,7 @@ export function PoliciesPage() {
   const [testInput, setTestInput] = useState('');
   const [deployPercentage, setDeployPercentage] = useState(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'policies' | 'templates' | 'versions' | 'dsl' | 'ab-test'>('policies');
   const [newPolicy, setNewPolicy] = useState({
     policy_name: '',
     policy_type: 'pii',
@@ -172,7 +177,32 @@ export function PoliciesPage() {
             )}
           </div>
 
-          {/* Policies List */}
+          {/* Navigation Tabs */}
+          <div className="flex gap-4 border-b overflow-x-auto">
+            {[
+              { id: 'policies', label: 'Policies' },
+              { id: 'templates', label: 'Templates' },
+              { id: 'versions', label: 'Version History' },
+              { id: 'dsl', label: 'DSL Editor' },
+              { id: 'ab-test', label: 'A/B Testing' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  'px-4 py-2 font-medium text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
+                  activeTab === tab.id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'policies' && (
           <div className="grid gap-4">
             {data?.policies.length === 0 ? (
               <Card>
@@ -361,21 +391,35 @@ export function PoliciesPage() {
                                   <AlertCircle className="h-5 w-5" />
                                 </div>
                                 <div className="flex-1">
-                                  <p className="font-medium">
-                                    {testResult.matched ? 'Pattern Matched!' : 'No Match'}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    {testResult.explanation}
-                                  </p>
-                                  {testResult.matched && testResult.action_taken === 'redact' && testResult.redacted_output && (
-                                    <div className="mt-2">
-                                      <span className="text-sm font-medium">Redacted Output:</span>
-                                      <p className="text-sm mt-1 bg-background px-2 py-1 rounded">
-                                        {testResult.redacted_output}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
+                                   <p className="font-medium">
+                                     {testResult.matched ? '⚠️ Pattern Matched!' : '✓ No Match'}
+                                   </p>
+                                   <p className="text-sm text-muted-foreground mt-1">
+                                     {testResult.explanation}
+                                   </p>
+                                   {testResult.matched && testResult.match_details && (
+                                     <div className="mt-2 text-sm">
+                                       <p className="font-medium text-foreground">
+                                         Detected: {testResult.match_details.count} match{testResult.match_details.count !== 1 ? 'es' : ''}
+                                       </p>
+                                       <div className="mt-1 bg-background px-2 py-1 rounded border border-muted">
+                                         {testResult.match_details.matches?.slice(0, 3).map((match: string, i: number) => (
+                                           <div key={i} className="text-xs font-mono text-destructive">
+                                             {i + 1}. {match}
+                                           </div>
+                                         ))}
+                                       </div>
+                                     </div>
+                                   )}
+                                   {testResult.matched && testResult.action_taken === 'redact' && testResult.redacted_output && (
+                                     <div className="mt-2">
+                                       <span className="text-sm font-medium">Redacted Output:</span>
+                                       <p className="text-sm mt-1 bg-background px-2 py-1 rounded border border-muted font-mono">
+                                         {testResult.redacted_output}
+                                       </p>
+                                     </div>
+                                   )}
+                                 </div>
                               </div>
                             </div>
                           )}
@@ -387,8 +431,67 @@ export function PoliciesPage() {
               ))
             )}
           </div>
-        </div>
-      </div>
+          )}
+
+          {activeTab === 'templates' && <TemplateBrowser />}
+
+          {activeTab === 'versions' && (
+            selectedPolicy ? (
+              <VersionHistory
+                policyId={selectedPolicy.policy_id}
+                onVersionSelect={(version) => console.log('Selected version:', version)}
+                onRollback={(targetVersion) => console.log('Rollback to:', targetVersion)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">No Policy Selected</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Please select a policy from the Policies tab to view its version history
+                  </p>
+                </CardContent>
+              </Card>
+            )
+          )}
+
+          {activeTab === 'dsl' && (
+           <Card>
+             <CardHeader>
+               <CardTitle>Policy DSL Editor</CardTitle>
+               <CardDescription>Create policies using Sentinel DSL</CardDescription>
+             </CardHeader>
+             <CardContent>
+               <DSLEditor
+                 value=""
+                 onChange={(value) => console.log('DSL changed:', value)}
+                 onValidate={(errors) => errors.length > 0 && console.error('Validation errors:', errors)}
+               />
+             </CardContent>
+           </Card>
+          )}
+
+          {activeTab === 'ab-test' && (
+            selectedPolicy ? (
+              <ABTestWizard
+                controlPolicyId={selectedPolicy.policy_id}
+                onComplete={() => { setActiveTab('policies'); alert('A/B test created!'); }}
+                onCancel={() => setActiveTab('policies')}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">No Policy Selected</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Please select a policy from the Policies tab to run A/B tests
+                  </p>
+                </CardContent>
+              </Card>
+            )
+          )}
+          </div>
+          </div>
 
       {/* Create Policy Dialog */}
       {showCreateDialog && (

@@ -8,12 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Users, Key, Plus, Trash2, Loader2, AlertCircle, Copy, Check } from 'lucide-react';
+import { Shield, Users, Key, Plus, Trash2, Loader2, AlertCircle, Copy, Check, Zap, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WebhookConfig } from '@/components/integrations/WebhookConfig';
+import { SlackSetupWizard } from '@/components/integrations/SlackSetupWizard';
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'organization' | 'users' | 'api-keys' | 'security'>('organization');
+  const [activeTab, setActiveTab] = useState<'organization' | 'users' | 'api-keys' | 'security' | 'integrations'>('organization');
+  const [showSlackSetup, setShowSlackSetup] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteFullName, setInviteFullName] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
@@ -203,6 +206,18 @@ export function SettingsPage() {
             >
               <Shield className="h-4 w-4 inline mr-2" />
               Security
+            </button>
+            <button
+              onClick={() => setActiveTab('integrations')}
+              className={cn(
+                'px-4 py-2 font-medium border-b-2 transition-colors',
+                activeTab === 'integrations'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Zap className="h-4 w-4 inline mr-2" />
+              Integrations
             </button>
           </div>
 
@@ -649,8 +664,57 @@ export function SettingsPage() {
               </Card>
             </div>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
+
+          {/* Integrations Tab */}
+          {activeTab === 'integrations' && (
+            <div className="space-y-6">
+              {/* Slack Integration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <MessageSquare className="h-5 w-5 mr-2" />
+                    Slack Integration
+                  </CardTitle>
+                  <CardDescription>
+                    Receive security alerts directly in Slack
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {showSlackSetup ? (
+                    <SlackSetupWizard onComplete={() => setShowSlackSetup(false)} />
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Connect your Slack workspace to receive real-time security alerts and threat notifications.
+                      </p>
+                      <Button onClick={() => setShowSlackSetup(true)}>
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Setup Slack Integration
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Webhooks */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Zap className="h-5 w-5 mr-2" />
+                    Webhooks
+                  </CardTitle>
+                  <CardDescription>
+                    Send security events to external systems
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <WebhookConfig />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          </div>
+          </div>
+          </div>
+          );
+          }

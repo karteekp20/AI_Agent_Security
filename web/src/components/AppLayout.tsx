@@ -1,4 +1,5 @@
-import { ReactNode, useState } from 'react';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, LayoutDashboard, Shield as ShieldIcon, FileText, FileBarChart, Settings, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';

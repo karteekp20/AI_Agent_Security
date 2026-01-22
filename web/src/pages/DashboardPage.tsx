@@ -17,6 +17,11 @@ import { DetectionRateGauge } from '@/components/dashboard/DetectionRateGauge';
 import { TimeframeSelector } from '@/components/dashboard/TimeframeSelector';
 import { RecentThreats } from '@/components/dashboard/RecentThreats';
 import { ThreatBreakdownCard } from '@/components/dashboard/ThreatBreakdownCard';
+import { RiskHeatmap } from '@/components/analytics/RiskHeatmap';
+import { TrendChart } from '@/components/analytics/TrendChart';
+import { AnomalyVisualization } from '@/components/dashboard/AnomalyVisualization';
+import { BehaviorTimeline } from '@/components/dashboard/BehaviorTimeline';
+import { ThreatMap } from '@/components/dashboard/ThreatMap';
 
 export function DashboardPage() {
   const [timeframe, setTimeframe] = useState('24h');
@@ -187,6 +192,61 @@ export function DashboardPage() {
                   />
                 )}
               </div>
+
+              {/* Live Threat Map */}
+              {user?.org_id && (
+                <div className="bg-white dark:bg-slate-900 rounded-lg border p-6 lg:col-span-2">
+                  <ThreatMap
+                    orgId={user.org_id}
+                    timeRange={timeframe as '1h' | '24h' | '7d'}
+                    onThreatClick={(threat) => console.log('Threat clicked:', threat)}
+                  />
+                </div>
+              )}
+
+              {/* Organization Risk Heatmap */}
+              <div className="bg-white dark:bg-slate-900 rounded-lg border p-6">
+                <h3 className="text-lg font-semibold mb-4">Organization Risk Scores</h3>
+                <RiskHeatmap />
+              </div>
+
+              {/* Threat Trends */}
+              {metrics?.threats_over_time && metrics.threats_over_time.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 rounded-lg border p-6">
+                  <h3 className="text-lg font-semibold mb-4">Threat Detection Trend</h3>
+                  <TrendChart
+                    data={metrics.threats_over_time.map((item: any) => ({
+                      timestamp: item.timestamp || item.date || new Date().toISOString(),
+                      value: item.count || item.threats || 0,
+                    }))}
+                    metric="Threats Detected"
+                    showAnomaly={true}
+                    showTrend={true}
+                  />
+                </div>
+              )}
+
+              {/* Anomaly Detection */}
+              {user?.org_id && (
+                <div className="bg-white dark:bg-slate-900 rounded-lg border p-6">
+                  <AnomalyVisualization
+                    orgId={user.org_id}
+                    timeRange={timeframe}
+                  />
+                </div>
+              )}
+
+              {/* User Behavior Timeline */}
+              {user?.user_id && user?.org_id && (
+                <div className="bg-white dark:bg-slate-900 rounded-lg border p-6">
+                  <BehaviorTimeline
+                    userId={user.user_id}
+                    orgId={user.org_id}
+                    timeRange={timeframe}
+                    userEmail={user.email}
+                  />
+                </div>
+              )}
 
               {/* Recent Threats */}
               {threatsLoading ? (

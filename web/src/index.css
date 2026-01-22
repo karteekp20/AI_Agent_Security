@@ -57,3 +57,28 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Timeline user info */
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.user-email {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.user-id {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+}

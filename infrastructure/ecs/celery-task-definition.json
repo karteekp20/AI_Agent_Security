@@ -1,0 +1,56 @@
+{
+  "family": "sentinel-celery",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/sentinelEcsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/sentinelEcsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "sentinel-celery",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/sentinel/api:latest",
+      "essential": true,
+      "command": ["celery", "-A", "sentinel.saas.celery_app", "worker", "--loglevel=info", "--concurrency=2"],
+      "environment": [
+        {"name": "ENVIRONMENT", "value": "production"},
+        {"name": "DEBUG", "value": "false"}
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/database-url"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/redis-url"
+        },
+        {
+          "name": "JWT_SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/jwt-secret"
+        },
+        {
+          "name": "CELERY_BROKER_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/celery-broker-url"
+        },
+        {
+          "name": "SMTP_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:sentinel/smtp-password"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sentinel-celery",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {"key": "Environment", "value": "production"},
+    {"key": "Project", "value": "sentinel"}
+  ]
+}

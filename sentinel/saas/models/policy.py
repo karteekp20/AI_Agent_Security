@@ -52,9 +52,14 @@ class Policy(Base):
     # Policy Definition
     policy_config = Column(
         JSONB,
-        nullable=False,
+        nullable=True,
         comment="Configuration: {pattern: '...', action: 'block', threshold: 0.8, ...}"
     )
+    
+    # Individual policy fields (flattened for easier access)
+    pattern_value = Column(String(1000), nullable=True, comment="Regex pattern or keyword")
+    action = Column(String(50), nullable=True, comment="block, redact, flag")
+    severity = Column(String(50), nullable=True, comment="low, medium, high, critical")
 
     # Version Control
     version = Column(Integer, default=1)
@@ -75,12 +80,43 @@ class Policy(Base):
     )
     deployed_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Active Status
+    is_active = Column(Boolean, default=True, nullable=False, comment="Is policy enabled")
+    
     # Canary Deployment / A/B Testing
     test_mode = Column(Boolean, default=False, comment="Test mode before full deployment")
     test_percentage = Column(
         Integer,
         default=0,
         comment="Percentage of traffic (0-100) for canary rollout"
+    )
+
+    # A/B Test Configuration (add after test_percentage column)
+    ab_test_config = Column(
+        JSONB,
+        nullable=True,
+        comment="A/B test configuration: {test_id, control_policy_id, start_time, ...}"
+    )
+
+    # DSL source code (for policy DSL support)
+    dsl_source = Column(
+        Text,
+        nullable=True,
+        comment="Raw DSL source code for custom policies"
+    )
+
+    # Compiled AST for faster evaluation
+    compiled_ast = Column(
+        JSONB,
+        nullable=True,
+        comment="Compiled AST from DSL source"
+    )
+
+    # Template reference
+    template_id = Column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Reference to policy template used to create this policy"
     )
 
     # Impact Tracking
@@ -111,11 +147,6 @@ class Policy(Base):
 
     def __repr__(self):
         return f"<Policy {self.policy_name} ({self.status}) type={self.policy_type}>"
-
-    @property
-    def is_active(self) -> bool:
-        """Check if policy is actively deployed"""
-        return self.status == "active"
 
     @property
     def false_positive_rate(self) -> float:

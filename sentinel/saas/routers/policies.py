@@ -6,7 +6,7 @@ Manage security policies, test patterns, and deploy with canary rollout
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
 import re
@@ -121,6 +121,80 @@ async def list_policies(
         page=page,
         page_size=page_size,
     )
+
+
+# ============================================================================
+# POLICY TEMPLATES (MUST be before /{policy_id} to avoid route conflicts)
+# ============================================================================
+
+@router.get("/templates")
+async def list_templates(
+    category: Optional[str] = Query(None, description="Filter by category"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List available policy templates"""
+    from ..services.policy_templates import PolicyTemplateService
+    service = PolicyTemplateService(db)
+    templates = service.list_templates(category)
+    return templates
+
+
+@router.get("/templates/{template_id}")
+async def get_template(
+    template_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a specific policy template"""
+    from ..services.policy_templates import PolicyTemplateService
+    service = PolicyTemplateService(db)
+    template = service.get_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+@router.post("/templates/instantiate")
+async def instantiate_template(
+    request: CreatePolicyRequest,
+    current_user: User = Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),
+):
+    """Create policy from template"""
+    set_org_context(db, current_user.org_id)
+
+    from ..services.policy_templates import PolicyTemplateService
+    service = PolicyTemplateService(db)
+
+    # Validate pattern is valid regex
+    try:
+        re.compile(request.pattern_value)
+    except re.error as e:
+        raise HTTPException(status_code=400, detail=f"Invalid regex pattern: {str(e)}")
+
+    # Create policy from template
+    policy = Policy(
+        policy_id=uuid4(),
+        org_id=current_user.org_id,
+        workspace_id=request.workspace_id,
+        policy_name=request.policy_name,
+        policy_type=request.policy_type,
+        pattern_value=request.pattern_value,
+        action=request.action,
+        severity=request.severity,
+        description=request.description,
+        is_active=request.is_active,
+        test_percentage=request.test_percentage,
+        version=1,
+        created_by=current_user.user_id,
+    )
+
+    db.add(policy)
+    db.commit()
+    db.refresh(policy)
+
+    return PolicyResponse.model_validate(policy)
 
 
 @router.get("/{policy_id}", response_model=PolicyResponse)
@@ -260,10 +334,14 @@ async def test_policy(
 
     if matched:
         if policy.action == "block":
-            explanation = f"Input would be BLOCKED. Matched pattern: {policy.pattern_value}"
+            explanation = f"Input would be BLOCKED. Matched pattern: {policy.pattern_value}. Detected {len(matches)} match(es): {', '.join(matches[:3])}"
         elif policy.action == "redact":
             redacted_output = pattern.sub("[REDACTED]", request.test_input)
-            explanation = f"Input would be REDACTED. Found {len(matches)} match(es)."
+            explanation = f"Input would be REDACTED. Found {len(matches)} match(es): {', '.join(matches[:3])}"
+        elif policy.action == "warn":
+            explanation = f"Input would be WARNED. Found {len(matches)} potential issue(s): {', '.join(matches[:3])}"
+        elif policy.action == "log":
+            explanation = f"Input would be LOGGED for audit. Found {len(matches)} match(es): {', '.join(matches[:3])}"
         elif policy.action == "flag":
             explanation = f"Input would be FLAGGED for review. Matched pattern: {policy.pattern_value}"
     else:
@@ -390,3 +468,121 @@ async def rollback_policy(
     db.refresh(policy)
 
     return PolicyResponse.model_validate(policy)
+
+
+# ============================================================================
+# POLICY VERSIONS
+# ============================================================================
+
+@router.get("/{policy_id}/versions")
+async def get_versions(
+    policy_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get policy version history"""
+    set_org_context(db, current_user.org_id)
+
+    # Verify policy exists and belongs to org
+    policy = db.query(Policy).filter(
+        Policy.policy_id == policy_id,
+        Policy.org_id == current_user.org_id,
+    ).first()
+
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    from ..services.policy_versioning import PolicyVersionControl
+    service = PolicyVersionControl(db)
+
+    versions = service.get_version_history(str(policy_id))
+    return {"versions": versions, "total": len(versions)}
+
+
+@router.post("/{policy_id}/versions")
+async def create_version(
+    policy_id: UUID,
+    comment: Optional[str] = None,
+    current_user: User = Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),
+):
+    """Create a new version of the policy"""
+    set_org_context(db, current_user.org_id)
+
+    # Verify policy exists and belongs to org
+    policy = db.query(Policy).filter(
+        Policy.policy_id == policy_id,
+        Policy.org_id == current_user.org_id,
+    ).first()
+
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    from ..services.policy_versioning import PolicyVersionControl
+    service = PolicyVersionControl(db)
+
+    new_version = await service.create_version(
+        policy_id=str(policy_id),
+        created_by=str(current_user.user_id),
+        comment=comment
+    )
+
+    return new_version
+
+
+@router.get("/{policy_id}/versions/{version}")
+async def get_version(
+    policy_id: UUID,
+    version: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a specific version of the policy"""
+    set_org_context(db, current_user.org_id)
+
+    # Verify policy exists and belongs to org
+    policy = db.query(Policy).filter(
+        Policy.policy_id == policy_id,
+        Policy.org_id == current_user.org_id,
+    ).first()
+
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    from ..services.policy_versioning import PolicyVersionControl
+    service = PolicyVersionControl(db)
+
+    versions = service.get_version_history(str(policy_id))
+    version_data = next((v for v in versions if v.get("version") == version), None)
+
+    if not version_data:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    return version_data
+
+
+@router.post("/{policy_id}/versions/{version}/rollback")
+async def rollback_to_version(
+    policy_id: UUID,
+    version: int,
+    current_user: User = Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),
+):
+    """Rollback policy to a specific version"""
+    set_org_context(db, current_user.org_id)
+
+    # Verify policy exists and belongs to org
+    policy = db.query(Policy).filter(
+        Policy.policy_id == policy_id,
+        Policy.org_id == current_user.org_id,
+    ).first()
+
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    from ..services.policy_versioning import PolicyVersionControl
+    service = PolicyVersionControl(db)
+
+    result = await service.rollback_to_version(str(policy_id), version)
+
+    return {"message": f"Rolled back to version {version}", "policy": result}

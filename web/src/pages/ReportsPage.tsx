@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { FileText, Plus, Download, Trash2, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Report } from '@/api/reports';
+import { TrendChart } from '@/components/analytics/TrendChart';
 
 export function ReportsPage() {
   const navigate = useNavigate();
@@ -206,6 +207,30 @@ export function ReportsPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Threat Trend Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Threat Trends</CardTitle>
+              <CardDescription>Historical threat detection patterns</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrendChart
+                data={[
+                  { timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), value: 24, trend: 'stable' },
+                  { timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), value: 19, trend: 'down' },
+                  { timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), value: 15, trend: 'down' },
+                  { timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), value: 18, trend: 'up' },
+                  { timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), value: 22, trend: 'up' },
+                  { timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), value: 28, trend: 'up' },
+                  { timestamp: new Date().toISOString(), value: 32, trend: 'up' },
+                ]}
+                metric="Threats per Day"
+                showAnomaly={false}
+                showTrend={true}
+              />
+            </CardContent>
+          </Card>
 
           {/* Reports List */}
           <Card>

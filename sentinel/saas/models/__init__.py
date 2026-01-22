@@ -16,6 +16,11 @@ from .policy import Policy
 from .report import Report
 from .subscription import Subscription
 from .email_log import EmailLog
+from .ml_model import MLModel
+from .user_baseline import UserBaseline
+from .webhook import Webhook
+from .webhook_delivery import WebhookDelivery
+from .integration import Integration
 
 __all__ = [
     "Base",
@@ -27,4 +32,9 @@ __all__ = [
     "Report",
     "Subscription",
     "EmailLog",
+    "MLModel",
+    "UserBaseline",
+    "Webhook",
+    "WebhookDelivery",
+    "Integration",
 ]
